@@ -1,0 +1,12 @@
+/**
+ * \defgroup libdessert DES-SERT library
+ * \defgroup Manual Manual
+ *
+ * \defgroup Architecture Architecture and concepts of DES-SERT
+ * \defgroup ExampleDaemon A simple example daemon
+ * \defgroup DaemonUsage How to use DES-SERT based daemons
+ * \defgroup FirstSteps First steps on how to develop a routing daemon
+ * \defgroup Android Steps explaining the build process for Android
+ * \defgroup AdvTopics Advanced topics
+ * \defgroup Troubleshoot Troubleshooting
+ */

@@ -1,0 +1,98 @@
+/**
+ * \ingroup Manual
+ * \addtogroup DaemonUsage
+ *
+ * This module provides information on how to use DES-SERT based Daemons. Here you can find the following parts:
+ *
+ * - \ref sec_usage_confs
+ * - \ref subsec_usage_conf1
+ * - \ref subsec_usage_conf2
+ * - \ref sec_usage_init
+ * - \ref sec_usage_debconf
+ * - \ref sec_usage_telnet
+ *
+ * @section sec_usage_confs Configuration Files
+ *
+ * All DES-SERT daemons should provide the following configuration files:
+ *
+ * - /etc/DAEMON_NAME.conf: protocol specific configuration file
+ * - /etc/default/DAEMON_NAME: protocol unspecific configuration file
+ *
+ * Both files are merged when using the provided \ref sec_usage_init "init script". Alternativley you can use the configuration files as an argument for your daemon and start it manually. At least it is recommanded to use the init script.
+ *
+ * @subsection subsec_usage_conf1 Protocol Configuration
+ *
+ * Protocol specific configuration shall only be placed in the /etc/DAEMON_NAME.conf file. Each line should be valid CLI syntax and, besides some CLI commands provided by DES-SERT, all commands should be parsed by user provided CLI callbacks.
+ *
+ * Example file:
+ * @code
+ *  no logging stderr
+ *  logging ringbuffer 20
+ *  logging file /var/log/des-gossip.log
+ *  set threshold 0.3
+ *  set metric etx
+ * @endcode
+ *
+ * @subsection subsec_usage_conf2 Daemon Configuration
+ *
+ * All values that are used by DES-SERT based daemons and that are protocol unspecific are placed in /etc/default/DAEMON_NAME. Currently, the configuration of the interfaces, TCP port of the CLI, and PID file are supported parameters.
+ *
+ * Example file:
+ * @code
+ *   PIDFILE="/var/run/des-gossip.pid"
+ *   DAEMON_OPTS="/etc/des-gossip.conf"
+ *   TAP_NAME=tap0
+ *   TAP_IP=10.0.0.1
+ *   TAP_NETMASK=255.255.0.0
+ *   CLI_PORT=4519
+ *   IFACE=eth0,eth1,wlan0
+ * @endcode
+ *
+ * @section sec_usage_init Init Script
+ *
+ * DES-SERT daemons should provide an init script to start and stop the daemon. You can start or stop you daemon by typing in:
+ *
+ * @code
+ *  /etc/init.d/DAEMON_NAME [start|stop]
+ * @endcode
+ *
+ * The example script provided in the des-example package additionally provides merging of both configurations files. The result is placed in a /tmp/DAEMON_NAME.cli and contains the original content of the protocol configuration file and interface configuration in the CLI syntax that has been compiled from the /etc/default/DAEMON_NAME file.
+ *
+ * @section sec_usage_debconf Debian Package Auto-Configuration
+ *
+ * We also provide sample files, in the seperately available des-example Debian package, on how to create a Debian package from DES-SERT daemons. A debconf script asks the user during the installation (or reconfiguration) of the particular Debian package for all the information that is contained in /etc/default/DAEMON_NAME.
+ *
+ * You should not add new parameters to the daemon configuration file or modify the init script if you want to make use of updated versions of des-example. The des-example project can be found on the <a href="http://www.des-testbed.net/DES-SERT/downloads" target="_blank">DES-SERT homepage</a>.
+ *
+ * @section sec_usage_telnet Accessing the CLI
+ *
+ * You can use a telnet program or similar applications and libraries to get access to the CLI. The default TCP port is 4519 (4=D, 5=E, 19=S). If this port isnt used you have to look into the /etc/default/DAEMON_NAME configuration file. The command line has an Cisco IOS like interface. The "help" command lists all commands that are available in the current mode and you can push TAB for auto-completion.
+ *
+ * @code
+ *  user@host:~$ telnet localhost 4519
+ *  Trying 127.0.0.1...
+ *  Connected to localhost.
+ *  Escape character is '^]'.
+ *
+ *  host:DAEMON_NAME> help
+ *
+ *  Commands available:
+ *  help                 Show available commands
+ *  quit                 Disconnect
+ *  logout               Disconnect
+ *  exit                 Exit from current mode
+ *  history              Show a list of previously run commands
+ *  enable               Turn on privileged commands
+ *  show dessert-info    Display information about this program.
+ *  show logging         show logging ringbuffer
+ *  show meshifs         Print list of registered interfaces used by the daemon.
+ *  show sysif           Print the name of the TUN/TAP interface used as system interface.
+ *  show threshold       show treshold
+ *
+ *  host:DAEMON_NAME>
+ * @endcode
+ *
+ * DAEMON_NAME is the name of the particular daemon.
+ *
+ * For in-detail information how the CLI is used, have a look at the <a href="http://code.google.com/p/libcli/wiki/" target="_blank">libcli Wiki</a>.
+ */

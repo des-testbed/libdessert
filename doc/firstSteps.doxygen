@@ -1,0 +1,827 @@
+/**
+ * \ingroup Manual
+ * \addtogroup FirstSteps
+ *
+ * This module is a step by step guide on how to implement, compile and to extend a DES-SERT based daemon with routing logic.
+ * To learn more about the fundamental testbed architecture you should read the article \ref Architecture.
+ * Before we can start with our first real routing daemon you should have read \ref ExampleDaemon, where you learn how to implement a basic daemon that has no routing logic.
+ * To get familiar with configuration files there is an article about \ref DaemonUsage.
+ * If you have already read both articles, you can go on with this more advanced tutorial.
+ *
+ * This module provides following parts:
+ *
+ * - \ref sec_fs_rlogic_lsr
+ * - \ref sec_fs_rlogic_coldataneigh
+ * - \ref sec_fs_rlogic_floodnetw
+ * - \ref sec_fs_rlogic_fillrouting
+ * - \ref sec_fs_rlogic_expcode
+ * - \ref sec_fs_rlogic_deslsrc
+ * - \ref sec_fs_rlogic_deslsrh
+ * - \ref sec_fs_rlogic_deslsritemsh
+ * - \ref sec_fs_rlogic_deslsrphc
+ * - \ref sec_fs_rlogic_deslsrrlc
+ *
+ * @section sec_fs_rlogic_lsr The link state routing protocol
+ *
+ * For our tutorial we implement a simple link-state routing protocol.
+ * The link-state routing protocol is run by every router in the network.
+ * The basic concept of this routing protocol is that every deamon constructs a graph that represents the network based on neighborhood information.
+ *
+ * Each node can then independently calculate the best (lowest cost) path to every other node in the network and this information is eventually written into a routing table.
+ * Examples of well known link-state routing protocols include OSLR, OSPF, and IS-IS.
+ *
+ * In link-state routing protocols only local information (neighborhood information) is flooded over the network.
+ * So we can summarize the task of every router as "tell the world, who your neighbors are".
+ * When the dissemination of the data succeeds, every router has a complete graph of the network.
+ * In other words: Every router knows all the connections between any pair of routers.
+ * The link-state routing protocol can be divided into three tasks:
+ *
+ * \image html lsr_steps.png "Link state routing - protocol task"
+ *
+ * @section sec_fs_rlogic_coldataneigh Neighbor discovery
+ *
+ * First of all, each node needs to discover its neighbors.
+ * This is necessary since there are no information about the network when we are in the initial state.
+ * To discover neighbors, each router sends "hello" packets.
+ * The packets will not be forwarded and are thus dropped when they have been received and evaluated.
+ *
+ * The "hello" packet can be very simple and only needs a unique ID that identifies the sender.
+ * In our protocol we can simply use the MAC address.
+ *
+ * "hello" packets are sent periodically so that events like nodes joining of leaving the network or changing topologies can be handled.
+ * Thus there should be a timer for all neighbors to delete old entries when the node is reachable anymore.
+ *
+ * @section sec_fs_rlogic_floodnetw Dissemination of neighborhood information
+ *
+ * We assume that the neighbor discovery is running and neighbors have been found.
+ * This information is important for all other routers in the network to create the graph of the network.
+ * Therfore, we have to flood our neighborhood information over the whole network.
+ * This way, every router will get a complete view of the topology.
+ *
+ * In the following image you can see how this works in detail.
+ * Afterwards we will discuss the three main tasks of our protocol.
+ *
+ * \image html lsr02.png "Link state routing - collecting and disseminating information"
+ *
+ * The green node symbolizes the current mesh router.
+ * Orange nodes are 1-hop-neighbors, red nodes are 2-hop or n-hop-neighbors.
+ * First of all, each node starts to send and receive HELLO packets (image 1 and 2).
+ * Based on the neighborhood information a TC packet is created and sent to the neighbors (image 3).
+ * The receivers evaluate the TC packet and forward it to all the other nodes (image 4) by broadcast and thus the packet is flooded over the network.
+ *
+ * @section sec_fs_rlogic_fillrouting Create routing table based on the network topology
+ *
+ * When the first two task are successfully run, routing information has to be input into the routing table.
+ * A simple routing table can contain the following columns:
+ *
+ * \image html lsr_rt.png "Link state routing - routing table columns"
+ *
+ * - mac address: hardware address of the destination node
+ * - next hop: address of the router that is the next hop on the route to the destination
+ * - distance: the distance respectively the cost to reach the destination (depends on the used routing metric, example: hop count)
+ *
+ * The routing table can of course be larger, containing more information.
+ * This is just a basic example.
+ *
+ * @section sec_fs_rlogic_expcode Structure of the source code
+ *
+ * The example link state daemon will by split in the following parts/files:
+ * - des-lsr.c
+ * - des-lsr.h
+ * - des-lsr_items.h
+ * - des-lsr_packethandler.c
+ * - des-lsr_routinglogic.c
+ *
+ * Flags and prototypes are defined in the des-lsr.h header file, the „main header“.
+ * The second header file called des-lsr_items.h will contain data structures to store information about the neighbors, the graph represented as an adjacency matrix, as well as the routing table.
+ *
+ * The most important file of our project is des-lsr_routinglogic.c.
+ * Here you can find callbacks for periodic tasks and the handling of packets.
+ * Incoming or outgoing packets are evaluated and processed.
+ *
+ * @section sec_fs_rlogic_deslsrc Explaining the code - des-lsr.c
+ *
+ * First have a look on the des-lsr.c file, contains the entry point into our program.
+ *
+ * @code
+ * // --- LIBRARIES --- //
+ * #include "des-lsr.h"
+ * #include "des-lsr_items.h"
+ *
+ * // --- DAEMON INITIALIZATION --- //
+ * int main (int argc, char** argv) {
+ * 	FILE *cfg;
+ *
+ * 	if ((argc == 3) && (strcmp(argv[2], "-nondaemonize") == 0)) {
+ * 		dessert_init("lsr", 0x01, DESSERT_OPT_NODAEMONIZE);
+ * 		char* cfg_file_name = argv[1];
+ * 		cfg = fopen(cfg_file_name, "r");
+ * 		if (!cfg) {
+ * 			printf("Config file '%s' not found. Exit ...\n", cfg_file_name);
+ * 			return EXIT_FAILURE;
+ * 		}
+ * 	} else {
+ * 		dessert_init("lsr", 0x01, DESSERT_OPT_DAEMONIZE);
+ * 		cfg = dessert_cli_get_cfg(argc, argv);
+ * 	}
+ * 	dessert_info("logging set");
+ *
+ * 	init_logic();
+ * 	dessert_info("routing initialized");
+ *
+ * 	dessert_sysrxcb_add(sys_to_mesh, 10);
+ * 	dessert_meshrxcb_add(dessert_msg_ifaceflags_cb, 20);
+ * 	dessert_meshrxcb_add(drop_errors, 40);
+ * 	dessert_meshrxcb_add(process_hello, 50);
+ * 	dessert_meshrxcb_add(process_tc, 60);
+ * 	dessert_meshrxcb_add(forward_packet, 70);
+ * 	dessert_meshrxcb_add(mesh_to_sys, 80);
+ * 	dessert_info("callbacks registered");
+ *
+ * 	cli_register_command(dessert_cli, dessert_cli_cfg_iface, "sys", dessert_cli_cmd_addsysif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize sys interface");
+ * 	cli_register_command(dessert_cli, dessert_cli_cfg_iface, "mesh", dessert_cli_cmd_addmeshif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize mesh interface");
+ * 	cli_file(dessert_cli, cfg, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
+ * 	dessert_info("cli initialized");
+ *
+ * 	dessert_cli_run();
+ * 	dessert_run();
+ * 	return (0);
+ * }
+ * @endcode
+ *
+ * This function is indeed similar to the main function of the basic daemon that we have discussed.
+ * The configuration is read from a file, parsed, and evaluated.
+ * The routing logic is initialized and the function dessert_info is used to print a log message with level info.
+ *
+ * @code
+ * init_logic();
+ * dessert_info("routing initialized");
+ * @endcode
+ *
+ * Now the routing protocol will start its work but some additional work is required that will be discussed later.
+ * The rest of the code is similar to the basic daemon.
+ * Some callback functions are registered and the CLI is started.
+ * In the basic daemon we implemented the registration of mesh and sys interface in a custom way but this time just use the cli callbacks that are provided bey DES-SERT.
+ *
+ * As we have discussed in the introduction of the link state routing algorithm, every router has to handle incoming hello, tc (topology control), and normal data packets.
+ * For each of these tasks we register a specific callback function.
+ * In addition, one callback is registered to handle packets from the sys interface.
+ *
+ * @section sec_fs_rlogic_deslsrh Explaining the code - des-lsr.h
+ *
+ * In this header file we have some constants and prototypes.
+ *
+ * @code
+ * #include <dessert.h>
+ * #include <libcli.h>
+ *
+ * //////////////// CONSTANTS
+ * #define LSR_EXT_HELLO DESSERT_EXT_USER
+ * #define LSR_EXT_TC DESSERT_EXT_USER + 1
+ * #define LSR_TTL_DEFAULT 255
+ *
+ * //////////////// FUNCTIONS FROM des-lsr_routingLogic.c
+ * void init_logic();
+ * int send_hello(void *data, struct timeval *scheduled, struct timeval *interval);
+ * int send_tc(void *data, struct timeval *scheduled, struct timeval *interval);
+ * int refresh_list();
+ *
+ * void init_rt();
+ * int refresh_rt();
+ *
+ * //////////////// FUNCTIONS FROM des-lsr_packetHandler.c
+ * int sys_to_mesh(dessert_msg_t *msg, size_t len, dessert_msg_proc_t *proc, dessert_sysif_t *sysif, dessert_frameid_t id);
+ * int mesh_to_sys(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id);
+ *
+ * int drop_errors(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id);
+ * int process_hello(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id);
+ * int process_tc(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id);
+ * int forward_packet(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id);
+ * @endcode
+ *
+ * This header file is included by all other project files.
+ * Therefore we include the dessert header, so that the functions can be used in our whole project.
+ * As you can see we declare some callbacks from des-lsr_packethandler.c and des-lsr_routinglogic.c.
+ *
+ * Two values for extention types are defined (LSR_EXT_HELLO and LSR_EXT_TC).
+ * Those extension extentions will be used to sent hello and tc packets.
+ * LSR_TTL_DEFAULT is simply the standard value for tc packets flooded through the network.
+ *
+ * @section sec_fs_rlogic_deslsritemsh Explaining the code - des-lsr_items.h
+ *
+ * In this header file you can find the data structures.
+ * A hello extension with a sequence number for the hello packet is defined.
+ * In general, sequence number are used to detect looping packets.
+ * It is actually not required in this case but included in this example for demonstation purposes.
+
+ * The following three data structures are used to store data of the network topology.
+ *
+ * @code
+ * #include <dessert.h>
+ * #include <uthash.h>
+ * #define LSR_DEFAULT_COUNTER 32
+ *
+ * typedef struct  hello_ext {
+ * 	u_int16_t seq_num;
+ * } __attribute__((__packed__)) hello_ext_t;
+ *
+ * // a hashmap for all current neighbours
+ * typedef struct dir_neighbours{
+ * 	u_int8_t addr[ETH_ALEN];
+ * 	u_int8_t counter;
+ * 	UT_hash_handle hh;
+ * } dir_neighbours_t;
+ * extern dir_neighbours_t *dir_neighbours_head;
+ *
+ * // a hashmap for all neighbours of a node
+ * typedef struct node_neighbours{
+ * 	u_int8_t addr[ETH_ALEN];
+ * 	UT_hash_handle hh;
+ * } node_neighbours;
+ *
+ * // a hashmap for all nodes
+ * typedef struct all_nodes {
+ * 	u_int8_t addr[ETH_ALEN];
+ * 	u_int8_t next_hop[ETH_ALEN];
+ * 	u_int8_t counter;
+ * 	node_neighbours* neighbours;
+ * 	UT_hash_handle hh;
+ * } all_nodes_t;
+ * extern all_nodes_t *all_nodes_head;
+ * @endcode
+ *
+ * You can find a hash map for the neighbours of the current node (dir_neighbours). In this hash map you find the main address of the neighbour and a counter, which specifies when an entry expires and should be deleted. As we know from ad hoc networks connections arent stable and from time to time it can happen that it breaks down. Such counter are very important to guarantee immediate reaction on breakdowns. When a hello packet is received the counter value in this data structure will be refreshed so that it doesnt expire to soon. The next two hash maps (node_neighbours and all_nodes) build a form of an adjacency matrix with the complete neighbouring information in the graph.
+ *
+ * The all_nodes hash map is a data structure containing all known nodes in the graph. So when a tc packet from an unknown sender is received this new node should be added to the all_nodes structure. In the structure you can find the main address of any known node, the next hop for this node (hardware address of the node, to whom the message should be forwarded to), again a counter specifying the expiration time and pointer to another hash map we didnt specify yet.
+ *
+ * In the node_neighbours struct you have a list of all neighbours connected to an arbitrary node. The idea is simple: In the all_nodes struct you find any node, in the node_neighbours you can find his neighbours. This could be seen as a form of an adjacency matrix. Or in fact you can simply translate this data structure into an adjacency matrix.
+ *
+ * @section sec_fs_rlogic_deslsrphc Explaining the code - des-lsr_packethandler.c
+ *
+ * There are two important files left. In this two files we have all of the routing logic and other important functions located. First of all we will look at the packet handler file. In this file we just have two callbacks. The sys_to_mesh function processes packets going to the mesh network to other mesh router. In the mesh_to_sys function the packets were sent from other mesh router.
+ *
+ * So in fact these functions are important for sending and receiving packets to/from the network. The sys_to_mesh function has to find out, which of the neighbours is the next hop for an outgoing package. Therefore it should lookup necessary information from the data structures we discussed above. The mesh_to_sys callback just has to check whether the incoming packet is for the current node, else it should drop the packet.
+ *
+ * @code
+ * #include "des-lsr.h"
+ * #include "des-lsr_items.h"
+ *
+ * int sys_to_mesh(dessert_msg_t *msg, size_t len, dessert_msg_proc_t *proc, dessert_sysif_t *sysif, dessert_frameid_t id){
+ * 	struct ether_header* l25h = dessert_msg_getl25ether(msg);			// ptr to l2.5 header
+ * 	all_nodes_t* node;
+ * 	HASH_FIND(hh, all_nodes_head, l25h->ether_dhost, ETH_ALEN, node);	// finding destination of msg in hashmap
+ *
+ * 	// if destination and next hop for destination is known
+ * 	if (node && memcmp(node->next_hop, ether_broadcast, ETH_ALEN) != 0) {
+ * 		memcpy(msg->l2h.ether_dhost, node->next_hop, ETH_ALEN);
+ * 		dessert_meshsend_fast(msg, NULL);
+ * 	}
+ *
+ *     return DESSERT_MSG_DROP;
+ * }
+ *
+ * int mesh_to_sys(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id){
+ * 	if((proc->lflags & DESSERT_LFLAG_DST_SELF && !(proc->lflags & DESSERT_LFLAG_DST_SELF_OVERHEARD))
+ * 			|| proc->lflags & DESSERT_LFLAG_DST_BROADCAST
+ * 			|| proc->lflags & DESSERT_LFLAG_DST_MULTICAST )
+ * 		dessert_syssend_msg(msg);
+ * 	return DESSERT_MSG_DROP;
+ * }
+ * @endcode
+ *
+ * As you can see in the sys_to_mesh function we have to extract the layer 2.5 information from the outgoing packet. The reason is simple: in the l25->ether_dhost the destination for the packet is given. From the routing table, which is formed by two hash maps (as we seen in the items header), we lookup the destination information.
+ *
+ * If the destination address is available and the next hop entry for that node is not set to broadcast (which means that it is not in the initial state and we already filled in the real MAC address of the destination), we just copy the next_hop information for this destination node into the destination field of the msg and send the packet to the meshed network. Therefore we use the dessert_meshsend_fast function, which simply sends the message without creating a copy.
+ *
+ * In most cases it is recommanded to use this function to get a daemon with better performance. In the skeleton we use the dessert_meshsend(msg, NULL); function instead. Now that you know both functions, you should use the dessert_meshsend_fast in most cases. So all in all the sys_to_mesh function gets the next hop information and puts it into the outgoing message.
+ *
+ * Now we will discuss the mesh_to_sys function. This function checks whether an incoming packet is dedicated to this mesh router. Therefore it checks whether this message is sent from the router itself or is a broadcast or multicast message. If so, we call dessert_syssend_msg(msg); to send the incoming message through the sys interface.
+ *
+ * @section sec_fs_rlogic_deslsrrlc Explaining the code - des-lsr_routingLogic.c
+ *
+ * We come to the most important file and the most important functions of our project. The other project files are only for setup or just have some data structures or flags. Now we come to the part which actively takes over the routing and fills those data structures with information. Lets directly look into the code:
+ *
+ * @code
+ * #include "des-lsr.h"
+ * #include "des-lsr_items.h"
+ *
+ * dir_neighbours_t* dir_neighbours_head = NULL;
+ * all_nodes_t* all_nodes_head = NULL;
+ *
+ * // adds hello sending, tc sending and refreshing topology information to the periodics
+ * void init_logic() {
+ * 	struct timeval interval;
+ * 	interval.tv_sec = 1;
+ * 	interval.tv_usec = 500000;
+ * 	dessert_periodic_add(send_hello, NULL, NULL, &interval);
+ *
+ * 	interval.tv_sec = 2;
+ * 	interval.tv_usec = 0;
+ * 	dessert_periodic_add(send_tc, NULL, NULL, &interval);
+ *
+ * 	interval.tv_sec = 3;
+ * 	interval.tv_usec = 0;
+ * 	dessert_periodic_add(refresh_list, NULL, NULL, &interval);
+ *
+ * 	interval.tv_sec = 4;
+ * 	interval.tv_usec = 0;
+ * 	dessert_periodic_add(refresh_rt, NULL, NULL, &interval);
+ * }
+ *
+ * // --- PERIODIC PIPELINE --- //
+ * u_int16_t hello_seq_num = 0;
+ *
+ * int send_hello(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	dessert_msg_t *hello;
+ * 	dessert_msg_new(&hello);
+ * 	hello->ttl = 1;							// hello only for direct neighbours
+ *
+ * 	dessert_ext_t *ext = NULL;
+ * 	dessert_msg_addext(hello, &ext, LSR_EXT_HELLO, sizeof(hello_ext_t));
+ * 	hello_ext_t* hello_ext_data =  (hello_ext_t*)ext->data;
+ * 	hello_ext_data->seq_num = hello_seq_num++;
+ *
+ * 	dessert_meshsend_fast(hello, NULL);		// send without creating copy
+ * 	dessert_msg_destroy(hello);				// we have created msg, we have to destroy it
+ * 	dessert_info("HELLO packet sent");
+ * 	return 0;
+ * }
+ *
+ * int send_tc(void *data, struct timeval *scheduled, struct timeval *interval) {
+ * 	dir_neighbours_t *neighbour = dir_neighbours_head;
+ * 	if(!neighbour) return 0;		// return if no neighbours detected
+ *
+ * 	dessert_msg_t *tc;
+ * 	dessert_msg_new(&tc);
+ * 	tc->ttl = LSR_TTL_DEFAULT;		// tc packet should go to all nodes
+ *
+ * 	dessert_ext_t *ext;
+ * 	dessert_msg_addext(tc, &ext, LSR_EXT_TC, sizeof(HASH_COUNT(neighbour)*ETH_ALEN));
+ * 	void *current_addr_ptr = ext->data;
+ *
+ * 	// copying hardware addresses into extension
+ * 	while(neighbour) {
+ * 		memcpy(current_addr_ptr, neighbour->addr, ETH_ALEN);
+ * 		neighbour = neighbour->hh.next;
+ * 	}
+ *
+ * 	// add l2.5 header
+ * 	dessert_msg_addext(tc, &ext, DESSERT_EXT_ETH, ETHER_HDR_LEN);
+ * 	struct ether_header* l25h = (struct ether_header*) ext->data;
+ * 	memcpy(l25h->ether_shost, dessert_l25_defsrc, ETH_ALEN);
+ * 	memcpy(l25h->ether_dhost, ether_broadcast, ETH_ALEN);	// tc := broadcast packet
+ *
+ * 	dessert_meshsend_fast(tc, NULL);
+ * 	dessert_msg_destroy(tc);
+ * 	dessert_info("TC packet sent");
+ * 	return 0;
+ * }
+ *
+ * int refresh_list(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	dir_neighbours_t *dir_neigh = dir_neighbours_head;
+ *
+ * 	while (dir_neigh) {
+ * 		if (dir_neigh->counter-- == 0) {
+ * 			dir_neighbours_t* el_to_delete = dir_neigh;
+ * 			dir_neigh = dir_neigh->hh.next;
+ * 			HASH_DEL(dir_neighbours_head, el_to_delete);
+ * 			dessert_info("deleting neighbour (counter timeout)");
+ * 		} else {
+ * 			dessert_info("neighbour found: %02x:%02x:%02x:%02x:%02x:%02x | %u",
+ * 				dir_neigh->addr[0], dir_neigh->addr[1], dir_neigh->addr[2],
+ * 				dir_neigh->addr[3], dir_neigh->addr[4], dir_neigh->addr[5],
+ * 				dir_neigh->counter);
+ * 			dir_neigh = dir_neigh->hh.next;
+ * 		}
+ * 	}
+ *
+ * 	return 0;
+ * }
+ *
+ * int refresh_rt(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	all_nodes_t *ptr = all_nodes_head;
+ * 	all_nodes_t *node;
+ * 	node_neighbours *neighbour_ptr;
+ *
+ * 	while (ptr) {
+ * 		// if node is direct neighbour, they are next hops for themselves
+ * 		dir_neighbours_t *dir_neighbour;
+ * 		HASH_FIND(hh, dir_neighbours_head, ptr->addr, ETH_ALEN, dir_neighbour);
+ * 		if (dir_neighbour) memcpy(ptr->next_hop, ptr->addr, ETH_ALEN);
+ *
+ * 		// add next hop information for neighbours of current node
+ * 		neighbour_ptr = ptr->neighbours;
+ * 		while(neighbour_ptr){
+ * 			HASH_FIND(hh, all_nodes_head, neighbour_ptr->addr, ETH_ALEN, node);
+ * 			if (node) memcpy(node->next_hop, ptr->addr, ETH_ALEN);
+ * 			else {
+ * 				node = malloc(sizeof(all_nodes_t));
+ * 				memcpy(node->addr, neighbour_ptr->addr, ETH_ALEN);
+ * 				memcpy(node->next_hop, ptr->addr, ETH_ALEN);
+ * 				node->counter = LSR_DEFAULT_COUNTER;
+ * 				node->neighbours = NULL;
+ * 				HASH_ADD_KEYPTR(hh, all_nodes_head, node->addr, ETH_ALEN, node);
+ * 			}
+ *
+ * 			dessert_info("adding node to routing table: %02x:%02x:%02x:%02x:%02x:%02x",
+ * 				neighbour_ptr->addr[0], neighbour_ptr->addr[1], neighbour_ptr->addr[2],
+ * 				neighbour_ptr->addr[3], neighbour_ptr->addr[4], neighbour_ptr->addr[5]);
+ *
+ * 			neighbour_ptr = neighbour_ptr->hh.next;
+ * 		}
+ *
+ * 		ptr = ptr->hh.next;
+ * 	}
+ *
+ * 	return 0;
+ * }
+ *
+ * // --- CALLBACK PIPELINE --- //
+ * int drop_errors(dessert_msg_t* msg, size_t len,	dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id){
+ * 	if (proc->lflags & DESSERT_LFLAG_PREVHOP_SELF) return DESSERT_MSG_DROP;
+ * 	if (proc->lflags & DESSERT_LFLAG_SRC_SELF) return DESSERT_MSG_DROP;
+ * 	dessert_info("dropping packets sent to myself");
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ *
+ * int process_hello(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id){
+ * 	dessert_ext_t *ext;
+ *
+ * 	if(dessert_msg_getext(msg, &ext, LSR_EXT_HELLO, 0)){
+ * 		dir_neighbours_t *neighbour;
+ * 		HASH_FIND(hh, dir_neighbours_head, msg->l2h.ether_shost, ETH_ALEN, neighbour);
+ *
+ * 		if (neighbour) neighbour->counter = LSR_DEFAULT_COUNTER;
+ * 		else {
+ * 			neighbour = malloc(sizeof(dir_neighbours_t));
+ * 			if (neighbour) {
+ * 				memcpy(neighbour->addr, msg->l2h.ether_shost, ETH_ALEN);
+ * 				neighbour->counter = LSR_DEFAULT_COUNTER;
+ *
+ * 				// do no forward msg->l2h.ether_shost
+ * 				// better: forward keypointer to struct element
+ * 				// because msg can be deleted
+ *  				HASH_ADD_KEYPTR(hh, dir_neighbours_head, neighbour->addr, ETH_ALEN, neighbour);
+ * 			}
+ * 		}
+ *
+ * 		dessert_info("receiving HELLO packet from %02x:%02x:%02x:%02x:%02x:%02x",
+ * 			msg->l2h.ether_shost[0], msg->l2h.ether_shost[1], msg->l2h.ether_shost[2],
+ * 			msg->l2h.ether_shost[3], msg->l2h.ether_shost[4], msg->l2h.ether_shost[5]);
+ *
+ * 		neighbour = dir_neighbours_head;
+ * 		while(neighbour){
+ * 			dessert_info("Neighbour %02x:%02x:%02x:%02x:%02x:%02x",
+ * 				neighbour->addr[0], neighbour->addr[1], neighbour->addr[2],
+ * 				neighbour->addr[3], neighbour->addr[4], neighbour->addr[5]);
+ * 			neighbour = neighbour->hh.next;
+ * 		}
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ *
+ * int process_tc(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ * 	dessert_ext_t *ext;
+ *
+ * 	if(dessert_msg_getext(msg, &ext, LSR_EXT_TC, 0)){
+ * 		struct ether_header *l25h = dessert_msg_getl25ether(msg);
+ * 		size_t neighbours_count = ext->len / ETH_ALEN;
+ * 		void *neighbour_ptr = ext->data;
+ * 		all_nodes_t *node;
+ * 		HASH_FIND(hh, all_nodes_head, l25h->ether_shost, ETH_ALEN, node);
+ *
+ * 		if (node) {
+ * 			// if found in struct for all nodes, delete his neighbours
+ * 			node_neighbours* neighbour_el = node->neighbours;
+ * 			while (neighbour_el) {
+ * 				HASH_DEL(node->neighbours, neighbour_el);
+ * 				neighbour_el = node->neighbours;
+ * 			}
+ * 		} else {
+ * 			// if not found in struct for all nodes, add him
+ * 			node = malloc(sizeof(all_nodes_t));
+ *
+ * 			if (node) {
+ * 				memcpy(node->addr, l25h->ether_shost, ETH_ALEN);
+ * 				memcpy(node->next_hop, ether_broadcast, ETH_ALEN);
+ * 				node->counter = LSR_DEFAULT_COUNTER;
+ * 				node->neighbours = NULL;
+ * 				HASH_ADD_KEYPTR(hh, all_nodes_head, node->addr, ETH_ALEN, node);
+ * 			} else return DESSERT_MSG_DROP;
+ * 		}
+ *
+ * 		// add all neighbours of the node
+ * 		while (neighbours_count-- > 0) {
+ * 			node_neighbours *node_neighbour = malloc(sizeof(node_neighbours));
+ * 			if (node_neighbour == NULL) return DESSERT_MSG_DROP;
+ * 			memcpy(node_neighbour->addr, neighbour_ptr, ETH_ALEN);
+ * 			HASH_ADD_KEYPTR(hh, node->neighbours, node_neighbour->addr, ETH_ALEN, node_neighbour);
+ * 			neighbour_ptr += ETH_ALEN;
+ * 		}
+ *
+ * 		dessert_info("receiving TC packet from %02x:%02x:%02x:%02x:%02x:%02x",
+ * 			msg->l2h.ether_shost[0], msg->l2h.ether_shost[1], msg->l2h.ether_shost[2],
+ * 			msg->l2h.ether_shost[3], msg->l2h.ether_shost[4], msg->l2h.ether_shost[5]);
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ *
+ * int forward_packet(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ * 	// if current node is the destination of the message but message isnt for the current node
+ * 	if (memcmp(dessert_l25_defsrc, msg->l2h.ether_dhost, ETH_ALEN) == 0 && !(proc->lflags & DESSERT_LFLAG_DST_SELF)) {
+ * 		all_nodes_t* node;
+ * 		HASH_FIND(hh, all_nodes_head, msg->l2h.ether_dhost, ETH_ALEN, node);
+ *
+ * 		if (node && memcmp(node->next_hop, ether_broadcast, ETH_ALEN) != 0) {
+ * 			memcpy(msg->l2h.ether_dhost, node->next_hop, ETH_ALEN);
+ * 			dessert_meshsend_fast(msg, NULL);
+ * 		}
+ *
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ * @endcode
+ *
+ * This may look like a lot of complex code. but it is very simple indeed. We start with the init_logic() function. This function is called in the main function of our project. The important periodics as sending hello packets or sending tc packets are registered. Remember: in the link state routing every router periodically sends hello and topology change information to other routers.
+ *
+ * We have build such functions in this file, but we have to add them to the periodics. Therefore we use the dessert_periodic_add(); function. To let the daemon know, in which interval the given periodic should be called, we have to give him a pointer to an interval struct. We do this for all the important periodics:
+ *
+ * @code
+ * u_int16_t hello_seq_num = 0;
+ *
+ * int send_hello(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	dessert_msg_t *hello;
+ * 	dessert_msg_new(&hello);
+ * 	hello->ttl = 1;							// hello only for direct neighbours
+ *
+ * 	dessert_ext_t *ext = NULL;
+ * 	dessert_msg_addext(hello, &ext, LSR_EXT_HELLO, sizeof(hello_ext_t));
+ * 	hello_ext_t* hello_ext_data =  (hello_ext_t*)ext->data;
+ * 	hello_ext_data->seq_num = hello_seq_num++;
+ *
+ * 	dessert_meshsend_fast(hello, NULL);		// send without creating copy
+ * 	dessert_msg_destroy(hello);				// we have created msg, we have to destroy it
+ * 	dessert_info("HELLO packet sent");
+ * 	return 0;
+ * }
+ * @endcode
+ *
+ * We begin with the send_hello(...); function, which simply is for sending hello packets to all neighbours. The coding in this function is not difficult. First we create a DES-SERT message and set the ttl to 1, which means, that the message is only dedicated to the neighbours.
+ *
+ * As you know from the items file, we have created a hello extension which contains a sequence number. The sequence number is incremented in every hello extension. We add this extension to our created DES-SERT message and set the extension flag to LSR_EXT_HELLO. Afterwards we send the message without creating a copy over all mesh interfaces. Now we have a look at the periodic for sending topology change information through the whole network:
+ *
+ * @code
+ * int send_tc(void *data, struct timeval *scheduled, struct timeval *interval) {
+ * 	dir_neighbours_t *neighbour = dir_neighbours_head;
+ * 	if(!neighbour) return 0;		// return if no neighbours detected
+ *
+ * 	dessert_msg_t *tc;
+ * 	dessert_msg_new(&tc);
+ * 	tc->ttl = LSR_TTL_DEFAULT;		// tc packet should go to all nodes
+ *
+ * 	dessert_ext_t *ext;
+ * 	dessert_msg_addext(tc, &ext, LSR_EXT_TC, sizeof(HASH_COUNT(neighbour)*ETH_ALEN));
+ * 	void *current_addr_ptr = ext->data;
+ *
+ * 	// copying hardware addresses into extension
+ * 	while(neighbour) {
+ * 		memcpy(current_addr_ptr, neighbour->addr, ETH_ALEN);
+ * 		neighbour = neighbour->hh.next;
+ * 	}
+ *
+ * 	// add l2.5 header
+ * 	dessert_msg_addext(tc, &ext, DESSERT_EXT_ETH, ETHER_HDR_LEN);
+ * 	struct ether_header* l25h = (struct ether_header*) ext->data;
+ * 	memcpy(l25h->ether_shost, dessert_l25_defsrc, ETH_ALEN);
+ * 	memcpy(l25h->ether_dhost, ether_broadcast, ETH_ALEN);	// tc := broadcast packet
+ *
+ * 	dessert_meshsend_fast(tc, NULL);
+ * 	dessert_msg_destroy(tc);
+ * 	dessert_info("TC packet sent");
+ * 	return 0;
+ * }
+ * @endcode
+ *
+ * First we create a copy pointer to the neighbours hash table of the current node. If this hash table is empty, so if there are no neighbours, we simply return and dont send any topology change information. Now we create a new DES-SERT message and put the ttl to a default value. We know, that the tc packet should reach all other nodes in the network.
+ *
+ * We proceed to the interesting part of this function by creating an extension, which is not filled with structs like in the skeleton or in the hello extension. We directly put the hash table into the extension, which contains all neighbouring information. This is the purpose of the while loop.
+ *
+ * In the following lines we add a layer 2.5 header to our message. You will ask yourself, why there isnt such l2.5 header in the hello packets. The hello packets only are for the neighbours. Other network nodes will not receive those hello packets, if they arent neighbours of the current node.
+ *
+ * So in the hello packet the layer 2 header simply is equal to the layer 2.5 header. The reason is as follows. In the layer 2 header only the direct next hop is the destination, which means that the real destination isnt located in this header. Real destination means the destination which could be located in the very other part of the network. To reach this node, there will be many steps.
+ *
+ * Or in other words: Sometimes you cannot directly send you packet to the destination, you first have to send it to another node, which forwards you packet. In the layer 2 header this next hop address is saved in the destination. In the layer 2.5 header you will find the network address of your real destination. For a tc packet we create a layer 2.5 header and put the broadcast address into the destination field.
+ *
+ * Maybe you will ask yourself why the send_tc function is not void, since we actually do nothing with the returned value. In fact it is necessary in periodic functions to return an integer.
+ *
+ * @code
+ * int refresh_list(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	dir_neighbours_t *dir_neigh = dir_neighbours_head;
+ *
+ * 	while (dir_neigh) {
+ * 		if (dir_neigh->counter-- == 0) {
+ * 			dir_neighbours_t* el_to_delete = dir_neigh;
+ * 			dir_neigh = dir_neigh->hh.next;
+ * 			HASH_DEL(dir_neighbours_head, el_to_delete);
+ * 			dessert_info("deleting neighbour (counter timeout)");
+ * 		} else {
+ * 			dessert_info("neighbour found: %02x:%02x:%02x:%02x:%02x:%02x | %u",
+ * 				dir_neigh->addr[0], dir_neigh->addr[1], dir_neigh->addr[2],
+ * 				dir_neigh->addr[3], dir_neigh->addr[4], dir_neigh->addr[5],
+ * 				dir_neigh->counter);
+ * 			dir_neigh = dir_neigh->hh.next;
+ * 		}
+ * 	}
+ *
+ * 	return 0;
+ * }
+ * @endcode
+ *
+ * Neighbours of the current node may disappear. The refresh_list function simply checks, whether there were incoming hello packets any time recently. If so, the neighbour should stay in the neighbouring hash table. If not, just drop the neighbour, maybe the neighbour isnt any more. As you can see, we just iterate through the neighbouring list and check, whether a counter has expired. Then the neighbour is deleted in the hash table. If the counter is higher and so the entry hasnt expired, we just print the hardware address of this neighbour.
+ *
+ * @code
+ * int refresh_rt(void *data, struct timeval *scheduled, struct timeval *interval){
+ * 	all_nodes_t *ptr = all_nodes_head;
+ * 	all_nodes_t *node;
+ * 	node_neighbours *neighbour_ptr;
+ *
+ * 	while (ptr) {
+ * 		// if node is direct neighbour, they are next hops for themselves
+ * 		dir_neighbours_t *dir_neighbour;
+ * 		HASH_FIND(hh, dir_neighbours_head, ptr->addr, ETH_ALEN, dir_neighbour);
+ * 		if (dir_neighbour) memcpy(ptr->next_hop, ptr->addr, ETH_ALEN);
+ *
+ * 		// add next hop information for neighbours of current node
+ * 		neighbour_ptr = ptr->neighbours;
+ * 		while(neighbour_ptr){
+ * 			HASH_FIND(hh, all_nodes_head, neighbour_ptr->addr, ETH_ALEN, node);
+ * 			if (node) memcpy(node->next_hop, ptr->addr, ETH_ALEN);
+ * 			else {
+ * 				node = malloc(sizeof(all_nodes_t));
+ * 				memcpy(node->addr, neighbour_ptr->addr, ETH_ALEN);
+ * 				memcpy(node->next_hop, ptr->addr, ETH_ALEN);
+ * 				node->counter = LSR_DEFAULT_COUNTER;
+ * 				node->neighbours = NULL;
+ * 				HASH_ADD_KEYPTR(hh, all_nodes_head, node->addr, ETH_ALEN, node);
+ * 			}
+ *
+ * 			dessert_info("adding node to routing table: %02x:%02x:%02x:%02x:%02x:%02x",
+ * 				neighbour_ptr->addr[0], neighbour_ptr->addr[1], neighbour_ptr->addr[2],
+ * 				neighbour_ptr->addr[3], neighbour_ptr->addr[4], neighbour_ptr->addr[5]);
+ *
+ * 			neighbour_ptr = neighbour_ptr->hh.next;
+ * 		}
+ *
+ * 		ptr = ptr->hh.next;
+ * 	}
+ *
+ * 	return 0;
+ * }
+ * @endcode
+ *
+ * This function refreshes the next hop information for every node. As you know from the items header, we have a hash map containing all nodes of the network and a hash map containing all neighbours for all nodes. This two hash maps together have complete information about the network graph. We can easily filter the next hop information for any outgoing packet out of this data structures.
+ *
+ * In fact this function looks a bit complicated. We iterate through the hash map, which contains a list of all nodes in the network. When we find the node from the all-node-list in the neighbouring list, the next hop is the node itself. In other words: If a node is the neighbour of the current node, all messages to this node should be sent to him directly and not to another node.
+ *
+ * We have a second pointer to the neighbouring hash map of the current chosen node in the all-node-list. If the neighbour of this node is represented in the all-node-list, so when we actually got topology change messages from the this neighbour, this neighbour is the next hop of the currently chosen node in the all-node-list. If the neighbour could not be found in the all-node-list, we have to add this neighbour and still make it the next hop. And this is it. We print some status information and return.
+ *
+ * @code
+ * int drop_errors(dessert_msg_t* msg, size_t len,	dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id){
+ * 	if (proc->lflags & DESSERT_LFLAG_PREVHOP_SELF) return DESSERT_MSG_DROP;
+ * 	if (proc->lflags & DESSERT_LFLAG_SRC_SELF) return DESSERT_MSG_DROP;
+ * 	dessert_info("dropping packets sent to myself");
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ * @endcode
+ *
+ * We go on with the callback pipeline. In such wireless networks like DES-testbed it is possible that an outgoing message could be received from the sender itself. So in fact the sender can receive his own packet. Obviously this message is not useful for the sender, so it can be dropped.
+ *
+ * In the drop_errors function you can see, that we drop such packets. Such packets can be dropped in the other functions, too. But when we check incoming packets at the beginning of the packet processing, we can ignore such cases in other callbacks. As you can see in the main function of our project this dropping function is one of the first callbacks in the callback pipeline.
+ *
+ * @code
+ * int process_hello(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id){
+ * 	dessert_ext_t *ext;
+ *
+ * 	if(dessert_msg_getext(msg, &ext, LSR_EXT_HELLO, 0)){
+ * 		dir_neighbours_t *neighbour;
+ * 		HASH_FIND(hh, dir_neighbours_head, msg->l2h.ether_shost, ETH_ALEN, neighbour);
+ *
+ * 		if (neighbour) neighbour->counter = LSR_DEFAULT_COUNTER;
+ * 		else {
+ * 			neighbour = malloc(sizeof(dir_neighbours_t));
+ * 			if (neighbour) {
+ * 				memcpy(neighbour->addr, msg->l2h.ether_shost, ETH_ALEN);
+ * 				neighbour->counter = LSR_DEFAULT_COUNTER;
+ *
+ * 				// do no forward msg->l2h.ether_shost
+ * 				// better: forward keypointer to struct element
+ * 				// because msg can be deleted
+ *  				HASH_ADD_KEYPTR(hh, dir_neighbours_head, neighbour->addr, ETH_ALEN, neighbour);
+ * 			}
+ * 		}
+ *
+ * 		dessert_info("receiving HELLO packet from %02x:%02x:%02x:%02x:%02x:%02x",
+ * 			msg->l2h.ether_shost[0], msg->l2h.ether_shost[1], msg->l2h.ether_shost[2],
+ * 			msg->l2h.ether_shost[3], msg->l2h.ether_shost[4], msg->l2h.ether_shost[5]);
+ *
+ * 		neighbour = dir_neighbours_head;
+ * 		while(neighbour){
+ * 			dessert_info("Neighbour %02x:%02x:%02x:%02x:%02x:%02x",
+ * 				neighbour->addr[0], neighbour->addr[1], neighbour->addr[2],
+ * 				neighbour->addr[3], neighbour->addr[4], neighbour->addr[5]);
+ * 			neighbour = neighbour->hh.next;
+ * 		}
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ * @endcode
+ *
+ * We have discussed the send_hello function, which periodically sends hello messages to all neighbours. This messages should be processed of any router in the network. The idea is simple: If an incoming packet is a hello packet, it should be checked whether the sender already is in the neighbouring list. If so, refresh the counter. If the sender isnt already in this list, we just have to add him.
+ *
+ * If you look at the code above, you will see how we implemented this functionality. There is only one thing you should be aware of. Adding a new neighbour to a hash map can be done using for example HASH_ADD(...). Therefore you have to forward the msg->l2h.ether_shost as a parameter, which simply is a pointer.
+ *
+ * When the message is deleted, this pointer will be useless, which means that the hash map entry will be useless as well. To grant that an entry stays in the hash map and is still valid after the message is deleted you should use HASH_ADD_KEYPTR instead and forward a keypointer to the struct element instead. This is written in the uthash user guide: "HASH_ADD_KEYPTR is used when the structure contains a pointer to the key, rather than the key itself".
+ *
+ * @code
+ * int process_tc(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ * 	dessert_ext_t *ext;
+ *
+ * 	if(dessert_msg_getext(msg, &ext, LSR_EXT_TC, 0)){
+ * 		struct ether_header *l25h = dessert_msg_getl25ether(msg);
+ * 		size_t neighbours_count = ext->len / ETH_ALEN;
+ * 		void *neighbour_ptr = ext->data;
+ * 		all_nodes_t *node;
+ * 		HASH_FIND(hh, all_nodes_head, l25h->ether_shost, ETH_ALEN, node);
+ *
+ * 		if (node) {
+ * 			// if found in struct for all nodes, delete his neighbours
+ * 			node_neighbours* neighbour_el = node->neighbours;
+ * 			while (neighbour_el) {
+ * 				HASH_DEL(node->neighbours, neighbour_el);
+ * 				neighbour_el = node->neighbours;
+ * 			}
+ * 		} else {
+ * 			// if not found in struct for all nodes, add him
+ * 			node = malloc(sizeof(all_nodes_t));
+ *
+ * 			if (node) {
+ * 				memcpy(node->addr, l25h->ether_shost, ETH_ALEN);
+ * 				memcpy(node->next_hop, ether_broadcast, ETH_ALEN);
+ * 				node->counter = LSR_DEFAULT_COUNTER;
+ * 				node->neighbours = NULL;
+ * 				HASH_ADD_KEYPTR(hh, all_nodes_head, node->addr, ETH_ALEN, node);
+ * 			} else return DESSERT_MSG_DROP;
+ * 		}
+ *
+ * 		// add all neighbours of the node
+ * 		while (neighbours_count-- > 0) {
+ * 			node_neighbours *node_neighbour = malloc(sizeof(node_neighbours));
+ * 			if (node_neighbour == NULL) return DESSERT_MSG_DROP;
+ * 			memcpy(node_neighbour->addr, neighbour_ptr, ETH_ALEN);
+ * 			HASH_ADD_KEYPTR(hh, node->neighbours, node_neighbour->addr, ETH_ALEN, node_neighbour);
+ * 			neighbour_ptr += ETH_ALEN;
+ * 		}
+ *
+ * 		dessert_info("receiving TC packet from %02x:%02x:%02x:%02x:%02x:%02x",
+ * 			msg->l2h.ether_shost[0], msg->l2h.ether_shost[1], msg->l2h.ether_shost[2],
+ * 			msg->l2h.ether_shost[3], msg->l2h.ether_shost[4], msg->l2h.ether_shost[5]);
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ * @endcode
+ *
+ * The main idea in topology change messages is to get information about the neighbouring of any node in the network. Such information should be added to the all-node-list or just refreshed in it. In the code above we first check whether the sender of the tc message already is in the local all-node-list. If so, his neighbouring information should first be deleted. If the node isnt in the data structure, we simply create an entry for it. Then we simply add all neighbours of the tc message to the data structure and print some status information.
+ *
+ * In fact this is a quite simple method and it isnt really good. So it could be, that the neighbouring information in the data structure is "newer" than the information in the tc message. We dont have sequence numbers in the tc message to check the currentness of the neighbouring.
+ *
+ * @code
+ * int forward_packet(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ * 	// if current node is the destination of the message but message isnt for the current node
+ * 	if (memcmp(dessert_l25_defsrc, msg->l2h.ether_dhost, ETH_ALEN) == 0 && !(proc->lflags & DESSERT_LFLAG_DST_SELF)) {
+ * 		all_nodes_t* node;
+ * 		HASH_FIND(hh, all_nodes_head, msg->l2h.ether_dhost, ETH_ALEN, node);
+ *
+ * 		if (node && memcmp(node->next_hop, ether_broadcast, ETH_ALEN) != 0) {
+ * 			memcpy(msg->l2h.ether_dhost, node->next_hop, ETH_ALEN);
+ * 			dessert_meshsend_fast(msg, NULL);
+ * 		}
+ *
+ * 		return DESSERT_MSG_DROP;
+ * 	}
+ *
+ * 	return DESSERT_MSG_KEEP;
+ * }
+ * @endcode
+ *
+ * The idea of this function is to forward a packet to the right destination. First we check, whether the layer 2 header address is similar to our default source address. So in other words we check, whether an incoming message is dedicated to us. Then we simply make a lookup from the routing table (hash map) and look, whether there is an entry for the outgoing message. If there is an entry and the next hop address isnt the broadcast address (which is set by default when no next hop is known) we simply forward the packet to the right next hop. Else the message could be dropped.
+ */

@@ -1,0 +1,721 @@
+-- -----------------------------------------------------------------------------
+-- Copyright 2009, David Gutzmann, Freie Universitaet Berlin (FUB).
+-- All rights reserved. 
+--
+-- These sources were originally developed by David Gutzmann
+-- at Freie Universitaet Berlin (http://www.fu-berlin.de/),
+-- Computer Systems and Telematics / Distributed, Embedded Systems (DES) group
+-- (http://cst.mi.fu-berlin.de/, http://www.des-testbed.net/)
+-- -----------------------------------------------------------------------------
+-- This program is free software: you can redistribute it and/or modify it under
+-- the terms of the GNU General Public License as published by the Free Software
+-- Foundation, either version 3 of the License, or (at your option) any later
+-- version.
+--
+-- This program is distributed in the hope that it will be useful, but WITHOUT
+-- ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+-- FOR A PARTICULAR PURPOSE. 
+-- See the GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License along with
+-- this program. If not, see http://www.gnu.org/licenses/ .
+-- -----------------------------------------------------------------------------
+-- For further information and questions please use the web site
+-- http://www.des-testbed.net/
+-- -----------------------------------------------------------------------------
+
+DESSERT-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    DisplayString, MacAddress, TruthValue, TEXTUAL-CONVENTION
+        FROM SNMPv2-TC
+    MODULE-IDENTITY, OBJECT-TYPE, Counter64, Integer32, Unsigned32, enterprises
+        FROM SNMPv2-SMI
+    OBJECT-GROUP, MODULE-COMPLIANCE
+        FROM SNMPv2-CONF;
+
+dessertMIB MODULE-IDENTITY
+    LAST-UPDATED "200911191000Z"
+    ORGANIZATION "Freie Universitaet Berlin (http://www.fu-berlin.de/)"
+    CONTACT-INFO
+        "Computer Systems and Telematics / Distributed, Embedded Systems (DES) 
+        group (http://cst.mi.fu-berlin.de/)
+
+        For further information and questions please use the web site
+               http://www.des-testbed.net/"
+    DESCRIPTION
+        "Some pre-release cleanup."
+    REVISION "200911191000Z"
+    DESCRIPTION
+        "Added DessertMeshifEntry type assignment."
+    REVISION "200910121300Z"
+    DESCRIPTION
+        "Moved the module-identity to the sub-pen assigned by the Rechnerbetrieb
+         at IMP/FUB."
+    REVISION "200910121200Z"
+    DESCRIPTION
+        "Added dessertAppStatsTable and desserAppParamsTable and related *Entry 
+        types."
+    REVISION "200909181427Z"
+    DESCRIPTION
+        "Added Copyright information."
+    REVISION "200909181400Z"
+    DESCRIPTION
+        "Added DessertSysifEntry type and dessertSysifTable."
+    REVISION "200908271542Z"
+    DESCRIPTION
+        "Added contact information."
+    REVISION "200908271437Z"
+    DESCRIPTION
+        "Added DessertMeshifEntry type assignment."
+    ::= { enterprises  18898  0  19  10  1 }
+
+-- ########################################################
+-- ## TEXTUAL CONVENTIONS                                ##
+-- ########################################################
+
+InterfaceIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS  current
+    DESCRIPTION
+        "A unique value for each mesh interface present in the managed 
+        system."
+    SYNTAX Integer32 (0..255)
+    
+DessertAppStatsIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS  current
+    DESCRIPTION
+        "A unique value for each statistical datum provided by the managed 
+        application."
+    SYNTAX Integer32 (0..255)
+
+DessertAppParamsIndex ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "d"
+    STATUS  current
+    DESCRIPTION
+        "A unique value for each parameter provided by the managed 
+        application."
+    SYNTAX Integer32 (0..255)
+
+DessertApplicationOctetString ::= TEXTUAL-CONVENTION
+    DISPLAY-HINT "1024a"
+    STATUS  current
+    DESCRIPTION
+        "A octet string provided by the application."
+    SYNTAX OCTET STRING (SIZE(0..1024))
+    
+DessertAppValueType ::= TEXTUAL-CONVENTION
+    STATUS current
+    DESCRIPTION
+        "The AppValueType textual convention is used to determine which of the 
+        columns in the dessertAppStatsTable or dessertAppParamsTable is actually
+        valid."
+    SYNTAX  INTEGER {
+                bool(0),        -- TruthValue // INTEGER { true(1), false(2) }
+                int32(1),       -- Integer32
+                uint32(2),      -- Unsigned32
+                counter64(3),   -- Counter64  // only valid for AppStatsTable
+                octetstring(4)  -- DessertApplicationOctetString 
+                                -- OCTET STRING (SIZE(0..1024))
+            }
+
+DessertAppNodeOrLink ::= TEXTUAL-CONVENTION
+    STATUS current
+    DESCRIPTION
+        "The AppNodeOrLink textual convention is used to determine which
+        of the appStatsMacAddress{1,2} columns is valid."
+    SYNTAX  INTEGER {
+                none(0),        -- neither appStatsMacAddress1 nor
+                                -- appStatsMacAddress2 is valid
+                node(1),        -- only appStatsMacAddress1 is valid
+                link(2)         -- only appStatsMacAddress2 is valid
+            }
+
+-- ########################################################
+-- ## OBJECTS                                            ##
+-- ########################################################
+
+
+dessertNotifications OBJECT IDENTIFIER  ::= { dessertMIB 0 }
+
+dessertObjects OBJECT IDENTIFIER    ::= { dessertMIB 1 }
+
+dessertConformance OBJECT IDENTIFIER    ::= { dessertMIB 2 }
+
+dessertStats OBJECT IDENTIFIER  ::= { dessertObjects 1 }
+
+dessertConfig OBJECT IDENTIFIER     ::= { dessertObjects 2 }
+
+dessertGeneralInformation OBJECT IDENTIFIER     ::= { dessertObjects 3 }
+
+dessertMeshifNumber OBJECT-TYPE
+    SYNTAX  Integer32 (0..256)
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The number of mesh interfaces present on this system."
+    ::= { dessertObjects 4 }
+
+dessertMeshifTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF DessertMeshifEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A list of interface entries. The number of entries is
+        given by the value of dessertMeshifNumber."
+    ::= { dessertObjects 5 }
+
+dessertSysifNumber OBJECT-TYPE
+    SYNTAX  Integer32 (0..256)
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The number of system (tun/tap) interfaces present on this system."
+    ::= { dessertObjects 6 }
+
+dessertSysifTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF DessertSysifEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "A list of interface entries. The number of entries is
+        given by the value of dessertSysifNumber."
+    ::= { dessertObjects 7}
+    
+dessertAppStatsTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF DessertAppStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Application provided statistics. The number of entries is 
+        given by the value of dessertAppStatsNumber."
+    ::= { dessertObjects 8}
+    
+dessertAppParamsTable OBJECT-TYPE
+    SYNTAX  SEQUENCE OF DessertAppParamsEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Application provided parameters. The number of entries is 
+        given by the value of dessertAppParamsNumber."
+    ::= { dessertObjects 9}
+
+dessertCompliances OBJECT IDENTIFIER    ::= { dessertConformance 1 }
+
+dessertGroups OBJECT IDENTIFIER     ::= { dessertConformance 2 }
+
+-- ########################################################
+-- ## GENERAL INFORMATION                                ##
+-- ########################################################
+
+applicationVersion OBJECT-TYPE
+    SYNTAX  Integer32 (0..255)
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "version of the app as passed to dessert_init()"
+    ::= { dessertGeneralInformation 2 }
+
+protocollShortName OBJECT-TYPE
+    SYNTAX  OCTET STRING (SIZE (0..4))
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "short name of the protocol as passed to dessert_init()"
+    ::= { dessertGeneralInformation 3 }
+
+
+-- ########################################################
+-- ## MESH INTERFACES                                    ##
+-- ########################################################
+
+meshifIndex OBJECT-TYPE
+    SYNTAX  InterfaceIndex
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "system ifindex"
+    ::= { dessertMeshifEntry 1 }
+
+
+meshifName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "name of interface"
+    ::= { dessertMeshifEntry 2 }
+
+
+meshifMacAddress OBJECT-TYPE
+    SYNTAX  MacAddress
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "hardware address of interface"
+    ::= { dessertMeshifEntry 3 }
+
+
+meshifInPkts OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "packet counter in"
+    ::= { dessertMeshifEntry 4 }
+
+
+meshifOutPkts OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "packet counter out"
+    ::= { dessertMeshifEntry 5 }
+
+
+meshifInOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "octet counter in"
+    ::= { dessertMeshifEntry 6 }
+
+
+meshifOutOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "octet counter out"
+    ::= { dessertMeshifEntry 7 }
+
+
+dessertMeshifEntry OBJECT-TYPE
+    SYNTAX  DessertMeshifEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "An entry containing management information applicable to a
+        particular mesh interface."
+    INDEX {
+        meshifIndex }
+    ::= { dessertMeshifTable 1 }
+
+
+DessertMeshifEntry ::= SEQUENCE {
+
+    meshifIndex      InterfaceIndex,
+    meshifName       DisplayString,
+    meshifMacAddress MacAddress,
+    meshifInPkts     Counter64,
+    meshifOutPkts    Counter64,
+    meshifInOctets   Counter64,
+    meshifOutOctets  Counter64 }
+
+-- ########################################################
+-- ## SYSTEM (TUN/TAP) INTERFACES                        ##
+-- ########################################################
+
+sysifIndex OBJECT-TYPE
+    SYNTAX  InterfaceIndex
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "system ifindex"
+    ::= { dessertSysifEntry 1 }
+
+
+sysifName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "name of interface"
+    ::= { dessertSysifEntry 2 }
+
+
+sysifMacAddress OBJECT-TYPE
+    SYNTAX  MacAddress
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "hardware address of interface"
+    ::= { dessertSysifEntry 3 }
+
+
+sysifInPkts OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "packet counter in"
+    ::= { dessertSysifEntry 4 }
+
+
+sysifOutPkts OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "packet counter out"
+    ::= { dessertSysifEntry 5 }
+
+
+sysifInOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "octet counter in"
+    ::= { dessertSysifEntry 6 }
+
+
+sysifOutOctets OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "octet counter out"
+    ::= { dessertSysifEntry 7 }
+
+
+dessertSysifEntry OBJECT-TYPE
+    SYNTAX  DessertSysifEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "An entry containing management information applicable to a
+        particular system (tun/tap) interface."
+    INDEX {
+        sysifIndex }
+    ::= { dessertSysifTable 1 }
+
+
+DessertSysifEntry ::= SEQUENCE {
+
+    sysifIndex      InterfaceIndex,
+    sysifName       DisplayString,
+    sysifMacAddress MacAddress,
+    sysifInPkts     Counter64,
+    sysifOutPkts    Counter64,
+    sysifInOctets   Counter64,
+    sysifOutOctets  Counter64 }
+
+-- ########################################################
+-- ## APPLICATION STATISTICS                             ##
+-- ########################################################
+
+appStatsIndex OBJECT-TYPE
+    SYNTAX  DessertAppStatsIndex
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Index of the statistical datum"
+    ::= { dessertAppStatsEntry 1 }
+
+appStatsName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The name of the statistical datum"
+    ::= { dessertAppStatsEntry 2 }
+
+appStatsDesc OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A short description of the statistical datum"
+    ::= { dessertAppStatsEntry 3 }
+
+appStatsNodeOrLink OBJECT-TYPE
+    SYNTAX  DessertAppNodeOrLink
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "Determines which of the appStatsMacAddress{1,2} columns
+        is valid and therefore indicates whether the information provided
+        by this row relates to a node or a link. "
+    ::= { dessertAppStatsEntry 4 }
+
+appStatsValueType OBJECT-TYPE
+    SYNTAX  DessertAppValueType
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "Indicates which of the columns (appStatsTruthValue, 
+        appStatsInterger32, appStatsUInteger32, appStatsCounter64, 
+        appStatsOctetString) in the dessertAppStatsTable is actually valid."
+    ::= { dessertAppStatsEntry 5 }
+
+appStatsMacAddress1 OBJECT-TYPE
+    SYNTAX  MacAddress
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The hardware address of a node."
+    ::= { dessertAppStatsEntry 6 }
+
+appStatsMacAddress2 OBJECT-TYPE
+    SYNTAX  MacAddress
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The hardware address of a second node."
+    ::= { dessertAppStatsEntry 7 }
+
+appStatsTruthValue OBJECT-TYPE
+    SYNTAX  TruthValue
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A statistical datum with TruthValue semantics."
+    ::= { dessertAppStatsEntry 8 }
+
+appStatsInteger32 OBJECT-TYPE
+    SYNTAX  Integer32
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A statistical datum with Integer32 semantics."
+    ::= { dessertAppStatsEntry 9 }
+
+appStatsUnsigned32 OBJECT-TYPE
+    SYNTAX  Unsigned32
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A statistical datum with Unsigned32 semantics."
+    ::= { dessertAppStatsEntry 10 }
+
+appStatsCounter64 OBJECT-TYPE
+    SYNTAX  Counter64
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A statistical datum with Counter64 semantics."
+    ::= { dessertAppStatsEntry 11 }
+
+appStatsOctetString OBJECT-TYPE
+    SYNTAX  DessertApplicationOctetString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A statistical datum containing of up to 1024 octets."
+    ::= { dessertAppStatsEntry 12 }
+
+dessertAppStatsEntry OBJECT-TYPE
+    SYNTAX  DessertAppStatsEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "An entry containing a single application provided 
+        statistical datum."
+    INDEX {
+        appStatsIndex }
+    ::= { dessertAppStatsTable 1 }
+
+DessertAppStatsEntry ::= SEQUENCE {
+
+    appStatsIndex       DessertAppStatsIndex,
+    appStatsName        DisplayString,
+    appStatsDesc        DisplayString,
+    
+    appStatsNodeOrLink  DessertAppNodeOrLink,
+    appStatsValueType   DessertAppValueType,
+    
+    appStatsMacAddress1 MacAddress,
+    appStatsMacAddress2 MacAddress,
+    
+    appStatsTruthValue  TruthValue,
+    appStatsInteger32   Integer32,
+    appStatsUnsigned32  Unsigned32,
+    appStatsCounter64   Counter64,
+    appStatsOctetString DessertApplicationOctetString }
+
+-- ########################################################
+-- ## APPLICATION PARAMETERS                             ##
+-- ########################################################
+
+appParamsIndex OBJECT-TYPE
+    SYNTAX  DessertAppParamsIndex
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "Index of the parameter."
+    ::= { dessertAppParamsEntry 1 }
+
+appParamsName OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "The name of the parameter."
+    ::= { dessertAppParamsEntry 2 }
+
+appParamsDesc OBJECT-TYPE
+    SYNTAX  DisplayString
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "A short description of the parameter"
+    ::= { dessertAppParamsEntry 3 }
+
+appParamsValueType OBJECT-TYPE
+    SYNTAX  DessertAppValueType
+    MAX-ACCESS read-only
+    STATUS  current
+    DESCRIPTION
+        "Indicates which of the columns (appParamsTruthValue, 
+        appParamsInterger32, appParamsUInteger32, appParamsOctetString) in the 
+        dessertAppParamsTable is actually valid."
+    ::= { dessertAppParamsEntry 4 }
+
+appParamsTruthValue OBJECT-TYPE
+    SYNTAX  TruthValue
+    MAX-ACCESS read-write
+    STATUS  current
+    DESCRIPTION
+        "A parameter with TruthValue semantics."
+    ::= { dessertAppParamsEntry 5 }
+
+appParamsInteger32 OBJECT-TYPE
+    SYNTAX  Integer32
+    MAX-ACCESS read-write
+    STATUS  current
+    DESCRIPTION
+        "A parameter with Integer32 semantics."
+    ::= { dessertAppParamsEntry 6 }
+
+appParamsUnsigned32 OBJECT-TYPE
+    SYNTAX  Unsigned32
+    MAX-ACCESS read-write
+    STATUS  current
+    DESCRIPTION
+        "A parameter with Unsigned32 semantics."
+    ::= { dessertAppParamsEntry 7 }
+
+appParamsOctetString OBJECT-TYPE
+    SYNTAX  DessertApplicationOctetString
+    MAX-ACCESS read-write
+    STATUS  current
+    DESCRIPTION
+        "A parameter containing of up to 1024 octets."
+    ::= { dessertAppParamsEntry 9 }
+
+dessertAppParamsEntry OBJECT-TYPE
+    SYNTAX  DessertAppParamsEntry
+    MAX-ACCESS not-accessible
+    STATUS  current
+    DESCRIPTION
+        "An entry containing a single application provided 
+        parameter."
+    INDEX {
+        appParamsIndex }
+    ::= { dessertAppParamsTable 1 }
+
+DessertAppParamsEntry ::= SEQUENCE {
+
+    appParamsIndex       DessertAppParamsIndex,
+    appParamsName        DisplayString,
+    appParamsDesc        DisplayString,
+    
+    appParamsValueType   DessertAppValueType,
+    
+    appParamsTruthValue  TruthValue,
+    appParamsInteger32   Integer32,
+    appParamsUnsigned32  Unsigned32,
+    appParamsOctetString DessertApplicationOctetString }
+
+-- ########################################################
+-- ## GROUPS                                             ##
+-- ########################################################
+
+dessertGeneralInformationGroup OBJECT-GROUP
+    OBJECTS {
+        applicationVersion,
+        protocollShortName,
+        dessertMeshifNumber,
+        dessertSysifNumber }
+    STATUS  current
+    DESCRIPTION
+        "General Information Group"
+    ::= { dessertGroups 1 }
+
+dessertMeshifGroup OBJECT-GROUP
+    OBJECTS {
+        meshifName,
+        meshifMacAddress,
+        meshifInPkts,
+        meshifOutPkts,
+        meshifInOctets,
+        meshifOutOctets }
+    STATUS  current
+    DESCRIPTION
+        "meshif Group"
+    ::= { dessertGroups 2 }
+    
+dessertSysifGroup OBJECT-GROUP
+    OBJECTS {
+        sysifName,
+        sysifMacAddress,
+        sysifInPkts,
+        sysifOutPkts,
+        sysifInOctets,
+        sysifOutOctets }
+    STATUS  current
+    DESCRIPTION
+        "sysif Group"
+    ::= { dessertGroups 3 }
+    
+dessertAppStatGroup OBJECT-GROUP    
+    OBJECTS {
+        appStatsName,
+        appStatsDesc,
+        appStatsNodeOrLink,
+        appStatsValueType,
+        appStatsMacAddress1,
+        appStatsMacAddress2,
+        appStatsTruthValue,
+        appStatsInteger32,
+        appStatsUnsigned32,
+        appStatsCounter64,
+        appStatsOctetString }
+    STATUS  current
+    DESCRIPTION
+        "appStats Group"
+    ::= { dessertGroups 4 }
+
+dessertAppParamsGroup OBJECT-GROUP    
+    OBJECTS {
+        appParamsName,
+        appParamsDesc,
+        appParamsValueType,
+        appParamsTruthValue,
+        appParamsInteger32,
+        appParamsUnsigned32,
+        appParamsOctetString }
+    STATUS  current
+    DESCRIPTION
+        "appParams Group"
+    ::= { dessertGroups 5 }
+
+dessertCompliance MODULE-COMPLIANCE
+    STATUS current
+    DESCRIPTION
+       "The following groups have to be implemented to be in compliance 
+       with this MIB."
+    MODULE MANDATORY-GROUPS {
+        dessertGeneralInformationGroup, 
+        dessertMeshifGroup,
+        dessertSysifGroup,
+        dessertAppStatGroup,
+        dessertAppParamsGroup }
+
+    ::= { dessertCompliances 1} 
+
+END

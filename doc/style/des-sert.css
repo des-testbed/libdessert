@@ -1,0 +1,509 @@
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family : Verdana, Arial, Helvetica, sans-serif;
+    font-size: 70%; 
+    line-height: 140%;
+    color: #333;
+    background: #fff;
+    margin: 0 1em 0 1em;
+}
+
+h1 {
+    font-size: 130%;
+    line-height: 140%;
+    font-weight: bold;
+    margin: 0 0 4px 0;
+    color: #333;
+}
+
+/*div.contents h1 {
+    font-size: 20px;
+    line-height: 140%;
+    font-weight: bold;
+    margin: 0 auto;
+    color: #333;
+    position: absolute;
+    top: 10px;
+}*/
+
+h2 {
+    font-size: 100%;
+    line-height: 140%;
+    font-weight: bold;
+    margin: 12px 0 4px 0;
+    color: #333;
+}
+
+h3 {
+    font-size: 100%;
+    line-height: 140%;
+    font-weight: bold;
+    margin: 12px 0 4px 0;
+    color: #666;
+}
+
+h4 {
+    font-size:100%;
+    line-height: 140%;
+    font-weight: normal;
+    margin: 4px 0 4px 0;
+    color: #c00;
+}
+
+h5 {
+    font-size: 100%;
+    line-height: 140%;
+    font-weight: normal;
+    margin: 4px 0 4px 0;
+    padding: 2px 2px 4px 2px;
+    background-color: #f4f4f4;
+    color: #333;
+    width: 99%;
+}
+
+h6 {
+    font-size: 90%;
+    line-height: 120%;
+    font-weight: normal;
+    color: #666;
+    margin: 4px 0 4px 0;
+}
+
+a:link {
+    color: #039;
+    text-decoration: none;
+    background-color: transparent;
+}
+
+a:visited {
+    color: #369;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #039;
+    text-decoration: underline;
+    background-color: transparent;
+}
+
+a:focus {
+    border: none;
+    color: #039;
+    text-decoration: underline;
+}
+
+p {
+    color: #333;
+    margin: 0;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.directory p {
+    margin: 0px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    white-space: nowrap;
+}
+
+.directory > h3 {
+    margin-top: 0;
+}
+
+.directory p {
+    margin: 0px;
+    white-space: nowrap;
+}
+
+.directory div {
+    display: none;
+    margin: 0px;
+}
+
+.directory img {
+    vertical-align: -30%;
+}
+
+/* these are for tree view when not used as main index */
+
+.directory-alt {
+    font-size: 100%;
+    font-weight: bold;
+}
+
+.directory-alt h3 {
+    margin: 0px;
+    margin-top: 1em;
+    font-size: 11pt;
+}
+
+.directory-alt > h3 {
+    margin-top: 0;
+}
+
+.directory-alt p {
+    margin: 0px;
+    white-space: nowrap;
+}
+
+.directory-alt div {
+    display: none;
+    margin: 0px;
+}
+
+.directory-alt img {
+    vertical-align: -30%;
+}
+
+li p { 
+        padding: 0; 
+}
+
+p strong, p b, td strong, td b {
+    color: #666;
+}
+
+a:link strong, a:hover strong, a:link b, a:hover b, a:visited strong, a:visited b,
+strong a:link, strong a:hover, b a:link, b a:hover, strong a:visited, b a:visited {
+color: #039;
+}
+
+.fragment {
+    font-family: monospace, fixed;
+    font-size: 105%;
+}
+
+code {
+    font-family: monospace, fixed;
+    font-size: 100%;
+}
+
+pre.fragment {
+    border: 1px solid #CCCCCC;
+    background-color: #f4f4f4;
+    padding: 4px 6px;
+    margin: 4px 8px 4px 2px;
+    overflow: auto;
+    word-wrap: break-word;
+    font-size:  9pt;
+    line-height: 125%;
+}
+
+.mdescLeft, .mdescRight,
+.memItemLeft, .memItemRight,
+.memTemplItemLeft, .memTemplItemRight, .memTemplParams {
+    background-color: #f4f4f4;
+    border: none;
+    margin: 4px;
+    padding: 1px 0 0 8px;
+}
+
+.mdescLeft, .mdescRight {
+    padding: 0px 8px 4px 8px;
+    color: #555;
+}
+
+.memItemLeft, .memItemRight, .memTemplParams {
+    border-top: 1px solid #ccc;
+}
+
+.memItemLeft, .memTemplItemLeft {
+        white-space: nowrap;
+}
+
+.memTemplParams {
+    color: #606060;
+        white-space: nowrap;
+}
+
+/* @end */
+
+/* @group Member Details */
+
+/* Styles for detailed member documentation */
+
+.memtemplate {
+    font-size: 80%;
+    color: #606060;
+    font-weight: normal;
+    margin-left: 3px;
+}
+
+.memnav {
+    background-color: #e8eef2;
+    border: 1px solid #84b0c7;
+    text-align: center;
+    margin: 2px;
+    margin-right: 15px;
+    padding: 2px;
+}
+
+.memitem {
+    padding: 0;
+    margin-bottom: 10px;
+}
+
+.memname {
+    white-space: nowrap;
+    font-weight: bold;
+}
+
+.memproto, .memdoc {
+    border: 1px solid #84b0c7;  
+}
+
+.memproto {
+    padding: 0;
+    background-color: #d5e1e8;
+    font-weight: bold;
+    -webkit-border-top-left-radius: 8px;
+    -webkit-border-top-right-radius: 8px;
+        -webkit-box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.15);
+    -moz-border-radius-topleft: 8px;
+    -moz-border-radius-topright: 8px;
+        -moz-box-shadow: rgba(0, 0, 0, 0.15) 5px 5px 5px;
+
+}
+
+.memdoc {
+    padding: 2px 5px;
+    background-color: #eef3f5;
+    border-top-width: 0;
+    -webkit-border-bottom-left-radius: 8px;
+    -webkit-border-bottom-right-radius: 8px;
+        -webkit-box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.15);
+    -moz-border-radius-bottomleft: 8px;
+    -moz-border-radius-bottomright: 8px;
+        -moz-box-shadow: rgba(0, 0, 0, 0.15) 5px 5px 5px;
+}
+
+.paramkey {
+    text-align: right;
+}
+
+.paramtype {
+    white-space: nowrap;
+}
+
+.paramname {
+    color: #602020;
+    white-space: nowrap;
+}
+.paramname em {
+    font-style: normal;
+}
+
+table, tr, td {
+    font-size: 100%;
+    line-height: 140%;
+    color: #333;
+}
+
+table {
+    margin: 10px 0 0 0;
+    border-spacing: 0;
+    border-color: #d1d1d1;
+    border-collapse: collapse;
+}
+
+td {
+    border-spacing: 0;
+}
+
+th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+    border-spacing: 0;
+}
+
+ul, ol, li {
+    font-size: 100%;
+    line-height: 140%;
+    list-style-type: none;
+}
+
+ul, li {
+    list-style-image: url(./box.gif); 
+}
+
+hr {
+    border: none;
+    border-bottom: 1px #999 solid;
+    height: 1px;
+    margin: 0;
+}
+
+blockquote {
+    left: 0;
+    margin: 0 0 0 14px;
+}
+
+dl, dt, dd {
+    font-size: 100%;
+    line-height: 140%;
+    list-style-type: none;
+}
+
+dl {
+    margin: 0 20px 0 0;
+    padding: 4px 0 4px 0;
+}
+
+dt {
+    margin: 0;
+    padding: 0;
+    line-height: 130%;
+    font-weight: bold;
+    color: #666;
+}
+
+dd {
+    margin: 0;
+    padding: 0;
+}
+
+
+hr.divider {
+    display: none;
+}
+
+.skip, .info {
+    position: absolute;
+    left: -1000px;
+    top: -1000px;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    display: inline;
+}
+
+img {
+    border: none;
+}
+
+#baseContent ul {
+    margin: 0 20px 0 0;
+    padding: 4px 0 4px 0;
+}
+
+#baseContent ol {
+    margin: 0 20px 0 0;
+    padding: 4px 0 4px 0;
+}
+
+#baseContent ol li {
+    list-style-type: decimal;
+    line-height: 140%;
+    /*margin: 0 0 0 20px;*/ 
+    margin: 0 0 0 35px; 
+    padding: 0;
+}
+
+#baseContent ul li {
+    margin: 0;
+    line-height: 140%;
+    padding: 0 0 0 10px;
+    background-image: url(../img/rechteck_gr_liste.gif);
+    background-repeat: no-repeat;
+    background-position: 0 7px;
+}
+
+#baseHeader {
+    top: 0;
+    margin: 0;
+    padding: 0;
+    height: 176px;
+    background: #fff url(./bg_body_standard_plus.gif) top repeat-x;
+}
+
+div.navigation { 
+    position: absolute;
+    left: 136px;
+    top: 76px;
+    margin: 0;
+    padding: 1px 0 0 0;
+    height: 19px;
+    background-color: transparent;
+    border-right: 1px solid #fff;
+    text-align: left;
+}
+
+.ftvtree {
+    font-family: sans-serif;
+    margin: 0.5em;
+}
+
+/* these are for tree view when used as main index */
+
+.directory h3 {
+    margin: 0px;
+    margin-top: 1em;
+}
+
+div.tabs ul {
+    margin: 0;
+    padding: 0;
+    display: inline;
+    color: #000;
+    white-space: nowrap;
+}
+
+div.tabs ul li {
+    margin: 0;
+    padding: 3px 10px 3px 15px;
+    border-left: 1px solid #fff;
+    list-style: none;
+    display: inline;
+    color: #000;
+    line-height: 170%;
+    background-image: url(./arrow.gif);
+    background-repeat: no-repeat;
+    background-position: 4px 9px;
+}
+
+div.tabs ul li a {
+    color: #036;
+    text-decoration: none;
+}
+
+div.tabs li a.aktiv {
+    color: #000;
+    text-decoration: none;
+}
+
+div.tabs ul li a:hover {
+    color: #fff;
+    background-color: #ababab;
+}
+
+div.cst-logo {
+    float: right;
+    position: relative;
+    top: 0em;
+    right: 1.5em;
+}
+
+div.dessert-logo {
+    float: left;
+    position: absolute;
+    top: 95px;
+    left: 1.5em;
+}
+
+div.fu-logo {
+    float: left;
+    position: relative;
+    top: 0.5em;
+    left: 1em;    
+}
+
+hr.footer {
+    margin-top: 2em;
+    height: 0.5em;
+    border: none;
+    border-top: 4px solid #99CC00;
+}

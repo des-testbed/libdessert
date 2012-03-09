@@ -1,0 +1,7 @@
+This is an addition dependency for libcli on android because the regex library
+is not part of the bionic c library.
+
+Source is from the android source tree /external/clearsilver/util/regex/ .
+
+Compiles to a static library libregex.a and is to be included in the
+build process of libcli as an additional linker object.

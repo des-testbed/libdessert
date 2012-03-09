@@ -1,0 +1,31 @@
+==================================== 
+ The    D E S -  S E R T   T E A M
+====================================
+
+Main Developers:
+    David Gutzmann <gutzmann@inf.fu-berlin.de>
+    Bastian Blywis <blywis@inf.fu-berlin.de>
+    originally developed by Philip Schmidt <phils@inf.fu-berlin.de>
+
+Project Management:
+    Bastian Blywis <blywis@inf.fu-berlin.de>
+
+Bug reports and contributions by:
+    Wladimir Degtjarew <degtjare@inf.fu-berlin.de>
+    Sebastian Hofmann <shof@inf.fu-berlin.de>
+    
+Autotools:
+    Henning Heinold <heinold@inf.fu-berlin.de>
+	Bastian Blywis <blywis@inf.fu-berlin.de>
+    
+DES-SERT is under development at Freie Universitaet Berlin, Germany
+Distributed, Embedded Systems (DES) research group, Prof Mesut Guenes
+
+--> http://www.des-testbed.net/
+--> http://cst.mi.fu-berlin.de/
+--> http://www.fu-berlin.de/
+
+We love feedback - if you have patches, comments or questions,
+   please contact us! Recent contact information is available on
+           http://www.des-testbed.net/des-sert/ 
+   or mail to des-sert@spline.inf.fu-berlin.de

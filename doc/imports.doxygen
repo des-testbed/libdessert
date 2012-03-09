@@ -1,0 +1,13 @@
+/**
+ * \defgroup imports Imports
+ *
+ * You can ignore this module. It is only necessary to force doxygen to copy
+ * images to the output dir that are only used in the header.html file.
+ *
+ * \image html FU-Logo.gif "Logo of the Freie Universitaet Berlin"
+ * \image html CST-Logo.png "Logo of the Computer Systems and Telematics Group"
+ * \image html dessert-small.png "DES-SERT Logo"
+ * \image html bg_body_standard_plus.gif "green line for header"
+ * \image html arrow.gif "arrow for header"
+ * \image html box.gif "box for list items"
+ */

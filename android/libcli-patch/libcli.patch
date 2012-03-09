@@ -1,0 +1,13 @@
+diff --git a/libcli.c b/libcli.c
+index ea673e5..dcebf7a 100644
+--- a/libcli.c
++++ b/libcli.c
+@@ -1098,7 +1098,7 @@ static int pass_matches(char *pass, char *try)
+     if ((des = !strncasecmp(pass, DES_PREFIX, sizeof(DES_PREFIX)-1)))
+         pass += sizeof(DES_PREFIX)-1;
+ 
+-#ifndef WIN32
++#if ! defined (ANDROID) && ! defined (WIN32)
+     /*
+      * TODO - find a small crypt(3) function for use on windows
+      */

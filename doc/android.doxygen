@@ -1,0 +1,96 @@
+/**
+ * \ingroup Manual
+ * \addtogroup Android
+ *
+ * \image html android.jpg
+ *
+ * This part of the documentation explains what files you need and what preparations you have to do to be able to compile and build the DES-SERT daemons for Android.
+ *
+ *
+ * @section sec_Android_automatic The easy way to set up the build environment
+ *
+ * In most cases you should be able to get a complete and running environment by running the script <a href="https://svn.mi.fu-berlin.de/des-testbed/Software/DES-SERT/libdessert/trunk/android">android.sh</a>.
+ * It fetches and builds all dependencies and tells you what environment variables you need to set.
+ * After running the script without errors, you can simply do a "make android" from any daemon's source directory to build it.
+ * 
+ * If for any reason you are not satisfied with the automatic script...read on ;). 
+ *
+ * @section sec_Android_whatyouneed What files do I need...
+ *
+ * @subsection sub_files_compilation ...for compilation
+ *
+ * The following files are needed for the compilation process:
+ *
+ * - an android compatible version of the daemon source code from <a href="https://svn.mi.fu-berlin.de/des-testbed/Software/DES-SERT/">here</a>.
+ * - an android NDK from <a href="http://developer.android.com/sdk/ndk/index.html">here</a>.
+ * - the dessert library for android. You need to either build this yourself or it may be available as archive.
+ * - the android gcc wrapper <a href="https://svn.mi.fu-berlin.de/des-testbed/Software/DES-SERT/libdessert/trunk/">android-gcc</a>.
+ *
+ * @subsection sub_files_running ...for running daemons on Android
+ *
+ * These files are needed for running the daemons on your android phone:
+ *
+ * - Eclipse with ADT plugin (on your development pc)
+ * - Android SDK
+ * - dessert-manager application from <a href="https://svn.mi.fu-berlin.de/des-testbed/Software/DES-SERT/dessert-app/">here</a>.
+ * - the .zip package of the daemon available from a svn repository. You will be able to build that .zip after doing the steps from this documentation.
+ *
+ * @section sec_Android_toolchain Installing the toolchain
+ *
+ * After you installed the NDK in a directory of your choice you need to set the environment variable ANDROID_NDK_HOME to the location where you just installed the NDK:
+ * - open a shell and type:
+ * - export ANDROID_NDK_HOME=/my/ndk/dir
+ *
+ * From now on this documentation refers to the NDK root directory as $NDK.
+ *
+ * Now switch to the $NDK directory and call the following script as shown:
+ *
+ * - ./make-standalone-toolchain.sh --ndk-dir=$NDK --install-dir=/your/install/location
+ *
+ * After you ran the script successfully, you have a working android toolchain installed in the install location you specified above.
+ *
+ * At last, we have to set the environment variable ANDROID_TOOLCHAIN:
+ *
+ * - export ANDROID_TOOLCHAIN=/your/toolchain/location
+ *
+ * @section sec_Android_android-gcc Installing the android-gcc wrapper
+ *
+ * Now, add the location of the "android-gcc" script to the path:
+ *
+ * - export PATH=/script/location:${PATH}
+ *
+ * If you now type "android-gcc -v" it should print out the currently used gcc version. If not, recheck if you did everything correctly until now.
+ *
+ * @section sec_Android_dessert-lib Installing/Building the dessert library for Android
+ * 
+ * If you have an archive of the dessert library for android, simply extract it somewhere and define DESSERT_LIB:
+ * 
+ * - export DESSERT_LIB=/dessert/lib/directory
+ *
+ * After you extracted the files, the specified directory should contain the subdirectories "include" and "lib".
+ *
+ * If you don't have an archive with the needed dessert library version available, you have to build it yourself. A README about that can be found <a href="https://svn.mi.fu-berlin.de/des-testbed/Software/DES-SERT/dessert-app/build-dessert-HOWTO.txt">here</a>.
+ *
+ * 
+ *
+ * @section sec_Android_compile Compiling a daemon
+ *
+ * Now just go the the daemon's source directory (e.g. ~/des-ara/trunk) and type:
+ *
+ * - make android
+ *
+ * The binary of the daemon and the .zip package ready for being copied to the dessert-manager repository can be found in the subdirectory "android.files".
+ *
+ * @section sec_Android_dessert-manager Installing the dessert-manager application
+ *
+ * The installation process of the dessert-manager android application is pretty straight forward. It is recommended to use eclipse with adt plugin:
+ *
+ * - Install eclipse and adt (android development tools) plugin
+ * - Import the dessert-manager project as "android project" from <a href="">here</a>.
+ * - Build it and install the .apk file to your phone. A simple way to achieve that would be using "adb install dessert-manager.apk" from your SDK installation.
+ *
+ * @section sec_Android_repository
+ *
+ * The dessert-manager application we installed above fetches the daemon package files from a http repository. That means, if you want to use your own daemons, you will have to set
+ * up a small web server and make your .zip packages available there.
+ */

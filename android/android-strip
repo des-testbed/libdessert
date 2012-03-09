@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+#
+# GCC wrapper script for the android NDK build system
+#
+
+# default values here
+my $ndk_home = "";              # e.g. ~/android-ndk-r3
+my $ndk_host = "";              # e.g. linux-x86
+my $ndk_platform = "android-4"; # e.g. android-4
+my $ndk_gcc_version = "4.4.0";  # e.g. 4.4.0
+
+# get from enviroment
+if ($ENV{"ANDROID_NDK_HOME"}) {
+    $ndk_home = $ENV{"ANDROID_NDK_HOME"};
+} else {
+    die "ANDROID_NDK_HOME must be set and pointing to an android ndk installation";
+}
+if ($ENV{"ANDROID_NDK_HOST"}) {
+    $ndk_host = $ENV{"ANDROID_NDK_HOST"};
+} else {
+    my $uname = `uname`;
+    if ($uname =~ /linux/i) {
+        $ndk_host = "linux-x86";
+    } elsif ($uname =~ /darwin/i) {
+        $ndk_host = "darwin-x86";
+    } elsif ($uname =~ /cygwin/i) {
+        $ndk_host = "windows";
+    } else {
+        die "The host system (${uname}) is not supported";
+    }
+}
+if ($ENV{"ANDROID_NDK_PLATFORM"}) {
+    $ndk_platform = $ENV{"ANDROID_NDK_PLATFORM"};
+}
+if ($ENV{"ANDROID_NDK_GCC_VERSION"}) {
+    $ndk_gcc_version = $ENV{"ANDROID_NDK_GCC_VERSION"};
+}
+
+# some helper vars
+my $host_dir = "${ndk_home}/build/prebuilt/${ndk_host}";
+my $toolchain_dir = "${host_dir}/arm-eabi-${ndk_gcc_version}";
+my $strip_exec = "${toolchain_dir}/bin/arm-eabi-strip";
+
+# check if those are valid
+die "The toolchain for host (${ndk_host}) does not exists please check ANDROID_NDK_HOST and your NDK installation" if not -d $host_dir;
+die "The toolchain version (${ndk_gcc_version}) does not exists please check ANDROID_NDK_GCC_VERSION and your NDK installation" if not -d $toolchain_dir or not -x $strip_exec ;
+
+
+my @cmd = ($strip_exec, "--strip-debug", @ARGV);
+
+#print join(" ", "### STRIP CALL: ", @cmd), " ###\n"; # Spit it out if you're curious
+#warn join(" ", "### STRIP CALL: ", @cmd), " ###\n"; # Spit it out if you're curious
+exec(@cmd);

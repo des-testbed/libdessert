@@ -1,0 +1,244 @@
+/**
+ * \ingroup Manual
+ * \addtogroup ExampleDaemon
+ *
+ * This module provides an example daemon based on DES-SERT and explains the most important parts. This example daemon has no routing logic. Only the most important DES-SERT mechanisms are used to show you the basic features of this framework. Here you can find the following parts:
+ *
+ * - \ref sec_example_1
+ * - \ref sec_example_ifaces
+ * - \ref sec_example_packets
+ * - \ref sec_example_ext
+ * - \ref sec_example_conf
+ * - \ref sec_example_complete
+ * - \ref sec_example_compiling
+ *
+ * @section sec_example_1 The Essentials
+ *
+ * For the most barebone implementation, let us consider it our "Hello World", you just need to include the headers of DES-SERT and libcli and provide the common C main function.
+ *
+ * To make the program a DES-SERT daemon, dessert_init() has to be called with a four byte name of the protocol, an 8 bit version number, and some option flags, e.g., to daemonize the program. dessert_run() starts the main thread of the daemon.
+ *
+ * The CLI should also usually be initialized by init_cli() and started with dessert_cli_run().
+ *
+ * @code
+ * #include <dessert.h>
+ * #include <libcli.h>
+ *
+ * int main (int argc, char** argv) {
+ *    dessert_init("expl", 0x05, DESSERT_OPT_DAEMONIZE);
+ *    init_cli();
+ *    dessert_cli_run();
+ *    dessert_run();
+ *    return (0);
+ * }
+ * @endcode
+ *
+ * These few lines of code already represent a DES-SERT daemon.
+ *
+ * @section sec_example_ifaces Adding Interfaces
+ *
+ * Right now the daemon can neither receive nor send any packets: interfaces have to be added. For this task DES-SERT already provides particular CLI commands that just have to be registered.
+ *
+ * We register the dessert_cli_cmd_addsysif() and dessert_cli_cmd_addmeshif() functions at the dessert_cli_cfg_iface anchor. All commands registered with this anchor have to be prefixed by the word "interface" in the the CLI. The registration of the CLI commands looks like this:
+ *
+ * @code
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "sys", dessert_cli_cmd_addsysif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize sys interface");
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "mesh", dessert_cli_cmd_addmeshif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize mesh interface");
+ * @endcode
+ *
+ * In the example daemon, dessert_cli_cfg_iface is registered by dessert_init() as a root anchor that can be used in the privileged mode. <a href="http://code.google.com/p/libcli/">libcli</a> is inspired by the <a href="http://www.cisco.com/en/US/docs/ios/12_0/configfun/configuration/guide/fcui.html">Cisco IOS command line interface</a> and provides the following modes:
+ *
+ * - User Mode
+ * - Privileged Mode
+ * - global configuration mode
+ *
+ * You should read the <a href="http://code.google.com/p/libcli/">libcli</a> documentation but for now it suffices to know that you can enter the privileged mode with "enable" and the global configuration mode with "configure terminal" when you are logged in.
+ *
+ * You have to use telnet to connect to the running daemon and add sys and mesh interfaces as follows:
+ *
+ * @code
+ * interface sys tap0 10.0.0.1 255.255.0.0
+ * interface mesh eth0
+ * @endcode
+ *
+ * Most often you will not configure the interfaces by hand but make use of the automatic configuration (see \ref DaemonUsage "How to use DES-SERT based Daemons" and \ref sec_example_conf "Parsing Configuration Files").
+ *
+ * @section sec_example_packets Handling Packets
+ *
+ * Right now, although the daemon can receive packets from the network (mesh) interfaces or the TAP (sys) interface, they are not handled and thus dropped. We have to add at least a sys callback that sends packets that are received via the TAP interface over all registered network interfaces and a mesh callback that sends packets received from the network interfaces to the user space via the TAP interface. sys and mesh callbacks have the prototypes ::dessert_sysrxcb_t and ::dessert_meshrxcb_t. In this example the sys callback is named toSys and the mesh callback toMesh.
+ *
+ * The mesh callback gets a pointer to the DES-SERT message that encapsulates an Ethernet frame. The message is send again with dessert_meshsend() over all registered mesh interfaces if the interface parameter is NULL but you can also specify a single interface. In the latter case, ::dessert_meshsend requires a ::dessert_meshif_t pointer as parameter. This is a struct for an interface with the hardware address and other values. Our callback function returns #DESSERT_MSG_DROP and signals DES-SERT to delete the message and free the used memory; we assume that we do not want to do anything with the DES-SERT message after it has been sent.
+ *
+ * @code
+ *  int toMesh(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, dessert_sysif_t *tunif, dessert_frameid_t id) {
+ *      dessert_meshsend(msg, NULL);
+ *      return DESSERT_MSG_DROP;
+ *  }
+ * @endcode
+ *
+ * The sys callback gets a pointer to a DES-SERT message with the encapsulated packet that was received from user space. The iface parameter is a pointer to the ::dessert_meshif_t that received the DES-SERT message. In this function we assume that the dessert_msg_ifaceflags_cb() callback was registered with higher priority than toSys. Thus the proc pointer will point to a valid processing buffer and the lflags can be used to differentiate message types. If the message is destined to this host or if it is a broadcast or multicast packet, the Ethernet frame is decapsulated and forwarded over the TAP interface by dessert_syssend() to the user space.
+ *
+ * #DESSERT_MSG_KEEP is returned so that lower priority callbacks can continue to handle the DES-SERT message. This it not the case in this example but you could for example dump all messages to the log in a lower priority sys callback.
+ *
+ * @code
+ *  int toSys(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ *      struct ether_header *eth;
+ *      size_t eth_len;
+ *
+ *      if (proc->lflags & DESSERT_RX_FLAG_L25_DST ||
+ *          proc->lflags & DESSERT_RX_FLAG_L25_BROADCAST ||
+ *          proc->lflags & DESSERT_RX_FLAG_L25_MULTICAST ) {
+ *              eth_len = dessert_msg_ethdecap(msg, &eth);
+ *              dessert_syssend(eth, eth_len);
+ *              free(eth);
+ *    }
+ *    return DESSERT_MSG_KEEP;
+ *  }
+ * @endcode
+ *
+ * The last step is to register the callbacks for the particular pipelines. The lower the value for the priority, the higher the priority of this registered function will be.
+ *
+ * @code
+ *  dessert_sysrxcb_add(toMesh, 50);
+ *  dessert_meshrxcb_add(dessert_msg_ifaceflags_cb, 15);
+ *  dessert_meshrxcb_add(toSys, 50);
+ * @endcode
+ *
+ * Now you can send a packet from host A to host B when they have a link to each other.
+ *
+ * @section sec_example_ext Extensions
+ *
+ * Consider you want to piggyback some data when packets are received from the sys interface and send over the network. First of all we should create an enumeration as follows:
+ *
+ * @code
+ *  enum extensions {
+ *      EXAMPLE_EXT_1 = DESSERT_EXT_USER,
+ *      EXAMPLE_EXT_2
+ *  };
+ * @endcode
+ *
+ * The first entry starts with the lowest value that can be assigned as type to user provided extensions. Extension types are specific to a particular protocol, therefore you can use any value => #DESSERT_EXT_USER as you like. In other words: If you have multiple extensions in your routing protocol, you can differentiate them based on the extension type. Therefore you can use #DESSERT_EXT_USER for the first extension, #DESSERT_EXT_USER+1 for the second and so on.
+ *
+ * Extensions will often times contain C-structs. Always use the __packed__ attribute or you might otherwise send more bytes than necessary over the medium. The attribute will instruct GCC to NOT add any bytes for padding (for memory alignement) and make variables or fields immediately next to each other.
+ *
+ * @code
+ *  typedef struct __attribute__((__packed__)) _my_extension {
+ *      uint8_t value1;
+ *      uint16_t value2;
+ *      char char1;
+ *  } my_extension;
+ * @endcode
+ *
+ * The extension can be added in any callback. In this example we add it to messages in the toMesh callback. ::dessert_msg_addext() adds a message to a DES-SERT message with the specified type and size and returns a pointer to the allocated memory via the second parameter (&ext in this example).
+ *
+ * @code
+ * my_extension *mext = NULL;
+ * dessert_ext_t *ext = NULL;
+ * dessert_msg_addext(msg, &ext, EXAMPLE_EXT_1, sizeof(my_extension));
+ * mext = (my_extension*) &(ext->data);
+ * mext->value1 = 123;
+ * mext->value2 = 45678;
+ * mext->char1 = 'X';
+ * @endcode
+ *
+ * @section sec_example_conf Parsing Configuration Files
+ *
+ * Last but not least, we will enable the parsing of a configuration file so that we do not have to configure the daemon by hand via telnet everytime it is started. dessert_cli_get_cfg() tries to open the file provided as parameter to the daemon and if this fails, it tries to open /etc/DAEMON_NAME.conf. cli_file() can then be used to parse the file. You should include an #assert to check whether cfg is a NULL pointer or handle the error any other way.
+ *
+ * @code
+ *  FILE *cfg = dessert_cli_get_cfg(argc, argv);
+ *  cli_file(dessert_cli, cfg, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
+ * @endcode
+ *
+ * @section sec_example_complete The Complete Example
+ *
+ * @code
+ * #include <stdio.h>
+ * #include <string.h>
+ * #include <dessert.h>
+ * #include <libcli.h>
+ *
+ * struct cli_command *cli_cfg_set;
+ *
+ * typedef struct __attribute__((__packed__)) _my_extension {
+ *    uint8_t value1;
+ *    uint16_t value2;
+ *    char char1;
+ * } my_extension;
+ *
+ * enum extensions {
+ *    EXAMPLE_EXT_1 = DESSERT_EXT_USER,
+ *    EXAMPLE_EXT_2
+ * };
+ *
+ * void init_cli() {
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "sys", dessert_cli_cmd_addsysif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize sys interface");
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "mesh", dessert_cli_cmd_addmeshif, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize mesh interface");
+ * }
+ *
+ *
+ * int toMesh(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, dessert_sysif_t *tunif, dessert_frameid_t id) {
+ *    my_extension *mext = NULL;
+ *    dessert_ext_t *ext = NULL;
+ *    dessert_msg_addext(msg, &ext, EXAMPLE_EXT_1, sizeof(my_extension));
+ *    mext = (my_extension*) &(ext->data);
+ *    mext->value1 = 123;
+ *    mext->value2 = 45678;
+ *    mext->char1 = 'X';
+ *    dessert_meshsend(msg, NULL);
+ *   return DESSERT_MSG_DROP;
+ * }
+ *
+ * int toSys(dessert_msg_t* msg, size_t len, dessert_msg_proc_t *proc, const dessert_meshif_t *iface, dessert_frameid_t id) {
+ *    struct ether_header *eth;
+ *    size_t eth_len;
+ *
+ *    if (proc->lflags & DESSERT_RX_FLAG_L25_DST ||
+ *          proc->lflags & DESSERT_RX_FLAG_L25_BROADCAST ||
+ *          proc->lflags & DESSERT_RX_FLAG_L25_MULTICAST ) {
+ *              eth_len = dessert_msg_ethdecap(msg, &eth);
+ *              dessert_syssend(eth, eth_len);
+ *              free(eth);
+ *    }
+ *
+ *    return DESSERT_MSG_KEEP;
+ * }
+ *
+ * int main (int argc, char** argv) {
+ *    FILE *cfg = dessert_cli_get_cfg(argc, argv);
+ *
+ *    dessert_init("expl", 0x05, DESSERT_OPT_DAEMONIZE);
+ *    dessert_logcfg(DESSERT_LOG_DEBUG|DESSERT_LOG_STDERR);
+ *
+ *    dessert_sysrxcb_add(toMesh, 50);
+ *    dessert_meshrxcb_add(dessert_msg_ifaceflags_cb, 15);
+ *    dessert_meshrxcb_add(toSys, 50);
+ *
+ *    init_cli();
+ *    cli_file(dessert_cli, cfg, PRIVILEGE_PRIVILEGED, MODE_CONFIG);
+ *    dessert_cli_run();
+ *
+ *    dessert_run();
+ *    return (0);
+ * }
+ * @endcode
+ *
+ * @section sec_example_compiling Compiling your daemon
+ *
+ * When you have finished writing your daemon you can compile it if all dependencies are met. You need some additional software like uthash, libpcap or libsnmp. So before you start compiling, install the dependencies. On a Debian system or any other distribution based on Debian, the required packages can be installed as follows:
+ *
+ * @code
+ * sudo apt-get update; sudo apt-get install libsnmp-dev libpcap-dev libcli-dev uthash-dev -y
+ * @endcode
+ *
+ * Now you need the libdessert library. It can be found <a href="http://www.des-testbed.net/DES-SERT/downloads" target="_blanks">on the DES-SERT homepage</a>. Download the libdessert library's source code, extract and compile it:
+ *
+ * @code
+ * ./configure; make; sudo make install; ldconfig
+ * @endcode
+ *
+ * This will configure, build and install the library on your system. Please check the output for any errors. Most errors are probably due to missing dependencies.
+ *
+ * Now the daemon can be compiled. Copy the configuration file to /etc or provide the file as parameter when you start the daemon. Thats it!
+ *
+ */

@@ -1,0 +1,244 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+#
+# GCC wrapper script for the android NDK build system
+#
+
+# default values here
+my $ndk_home = "";              # e.g. ~/android-ndk-r3
+my $ndk_host = "";              # e.g. linux-x86
+my $ndk_platform = "android-4"; # e.g. android-4
+my $ndk_gcc_version = "4.4.3";  # e.g. 4.4.0
+my $toolchain_dir = "";         #
+
+# get from enviroment
+if ($ENV{"ANDROID_NDK_HOME"}) {
+    $ndk_home = $ENV{"ANDROID_NDK_HOME"};
+} else {
+    die "ANDROID_NDK_HOME must be set and pointing to an android ndk installation. (E.g. ~/android-ndk-r5)";
+}
+if ($ENV{"ANDROID_TOOLCHAIN"}) {
+    $toolchain_dir = $ENV{"ANDROID_TOOLCHAIN"};
+} else {
+    die "ANDROID_TOOLCHAIN has to be set and point to your android-toolchain directory!";
+}
+if ($ENV{"ANDROID_NDK_PLATFORM"}) {
+    $ndk_platform = $ENV{"ANDROID_NDK_PLATFORM"};
+}
+unless ($ENV{"DESSERT_LIB"}) {
+    die "DESSERT_LIB has to be set and point to your dessert library directory!";
+}
+#if ($ENV{"ANDROID_NDK_HOST"}) {
+#    $ndk_host = $ENV{"ANDROID_NDK_HOST"};
+#} else {
+#    my $uname = `uname`;
+#    if ($uname =~ /linux/i) {
+#        $ndk_host = "linux-x86";
+#    } elsif ($uname =~ /darwin/i) {
+#        $ndk_host = "darwin-x86";
+#    } elsif ($uname =~ /cygwin/i) {
+#        $ndk_host = "windows";
+#    } else {
+#        die "The host system (${uname}) is not supported";
+#    }
+#}
+
+#if ($ENV{"ANDROID_NDK_GCC_VERSION"}) {
+#    $ndk_gcc_version = $ENV{"ANDROID_NDK_GCC_VERSION"};
+#}
+
+# some helper vars
+#my $host_dir = "";
+my $platform_dir = "";
+# Android NDK r3 - r4b
+if ($ndk_home =~ /-r3/i) {
+    $platform_dir = "${ndk_home}/build/platforms/${ndk_platform}";
+# Android NDK r5
+} elsif ($ndk_home =~ /-r5/i) {
+    $platform_dir = "${ndk_home}/platforms/${ndk_platform}";
+} elsif ($ndk_home =~ /-r6/i) {
+    $platform_dir = "${ndk_home}/platforms/${ndk_platform}";
+}
+
+my $gcc_exec = "${toolchain_dir}/bin/arm-linux-androideabi-gcc";
+
+# check if those are valid
+die "The path to the toolchain you specified does not exist, please check ANDROID_TOOLCHAIN !" if not -d $toolchain_dir;
+#die "The toolchain for host (${ndk_host}) does not exists please check ANDROID_NDK_HOST and your NDK installation" if not -d $host_dir;
+#die "The toolchain version (${ndk_gcc_version}) does not exists please check ANDROID_NDK_GCC_VERSION and your NDK installation" if not -d $toolchain_dir or not -x $gcc_exec ;
+#die "The platform (${ndk_platform}) does not exists please check ANDROID_NDK_PLATFORM and your NDK installation" if not -d $platform_dir;
+
+my %flags = (
+    # mode can be -E, -S or -c
+    doCompile       => 1,
+    doAssemble      => 1,
+    doLink          => 1,
+    createShared    => 0,
+    linkShared      => 1,
+    linkStatic      => 0,
+    createThumb     => 1,
+    sawFPIC         => 0,   # if fpic is already set or not
+);
+my @before_args = ();   # arguments to append to the beginning
+my @after_args = ();    # arguments to append to the end
+my @args = ();          # generic arguments
+
+# parse given arguments
+my @input = @ARGV;
+while (@input) {
+    my $a = shift(@input);
+    #print "${a}\n";
+    if ($a =~ /^--android-/) {
+        # android-gcc specific options
+        if ($a eq "--android-thumb-mode=on") {
+            # thumb mode on
+            $flags{'createThumb'} = 1;
+        } elsif ($a eq "--android-thumb-mode=off") {
+            # thumb mode off
+            $flags{'createThumb'} = 0;
+        } else {
+            die "Android gcc specific flag $a is not supported";
+        }
+    } elsif ($a eq "-v" or $a eq "--version") {
+        $flags{'doCompile'} = 0;
+        $flags{'doAssemble'} = 0;
+        $flags{'doLink'} = 0;
+        unshift(@before_args, $a);    # append to the beginning
+    } elsif ($a eq "-V") {
+        my $version = shift(@input);
+        unshift(@before_args, $version) if defined $version;
+        unshift(@before_args, $a);    # append to the beginning
+    } elsif ($a eq "-E") {
+        # Preprocess only; do not compile, assemble or link
+        die "Mode $a is not allowed if $flags{'mode'} is already set" if defined $flags{"mode"} and $flags{"mode"} ne $a;
+        $flags{'mode'} = $a;
+        $flags{'doCompile'} = 0;
+        $flags{'doAssemble'} = 0;
+        $flags{'doLink'} = 0;
+        push(@args, $a);
+    } elsif ($a eq "-S") {
+        # Compile only; do not assemble or link
+        die "Mode $a is not allowed if $flags{'mode'} is already set" if defined $flags{"mode"} and $flags{"mode"} ne $a;
+        $flags{'mode'} = $a;
+        $flags{'doAssemble'} = 0;
+        $flags{'doLink'} = 0;
+        push(@args, $a);
+    } elsif ($a eq "-c") {
+        # Compile and assemble, but do not link
+        die "Mode $a is not allowed if $flags{'mode'} is already set" if defined $flags{"mode"} and $flags{"mode"} ne $a;
+        $flags{'mode'} = $a;
+        $flags{'doLink'} = 0;
+        push(@args, $a);
+    } elsif ($a eq "-shared") {
+        # Create a shared library
+        $flags{'createShared'} = 1;
+        push(@args, $a);
+    } elsif ($a eq "-fPIC" or $a eq "-fpic") {
+        # Generate position-independent code if possible (large/small mode)
+        # we rewrite to small mode -fpic
+        $flags{'sawFPIC'} = 1;
+        push(@args, "-fpic");
+    } elsif ($a eq "-Bdynamic" or $a eq "-dy" or $a eq "-call_shared") {
+        # Link against shared libraries
+        $flags{'linkShared'} = 1;
+        $flags{'linkStatic'} = 0;
+        push(@args, $a);
+    } elsif ($a eq "-Bstatic" or $a eq "-dn" or $a eq "-non_shared" or $a eq "-static") {
+        # Do not link against shared libraries
+        $flags{'linkShared'} = 0;
+        $flags{'linkStatic'} = 1;
+        push(@args, $a);
+    } elsif ($a =~ /^\s*$/) {
+        # remove empty args
+        print $a, "\n";
+    } else {
+        push(@args, $a);
+    }
+}
+
+# Assemble the command:
+if (1) {
+    # we always add defines and includes
+    push(@args, "-I${platform_dir}/arch-arm/usr/include");
+    push(@args, "-D__ARM_ARCH_5__");
+    push(@args, "-D__ARM_ARCH_5T__");
+    push(@args, "-D__ARM_ARCH_5E__");
+    push(@args, "-D__ARM_ARCH_5TE__");
+    push(@args, "-DANDROID");
+    push(@args, "-DNDEBUG");		# TEST
+    #push(@args, "-D__linux__");		# yes or no?
+    #push(@args, "-D_GNU_SOURCE");		# yes or no? apparently most sources defines this themself...
+}
+
+if ($flags{'doCompile'}) {
+    push(@args, "-fpic") if not $flags{'sawFPIC'};
+    push(@args, "-mthumb") if $flags{'createThumb'};
+
+    push(@args, "-mthumb-interwork");                   # ???
+    push(@args, "-ffunction-sections");                 # ???
+    push(@args, "-funwind-tables");                     # ???
+    push(@args, "-fstack-protector");                   # ???
+    push(@args, "-fno-short-enums");                    # ???
+
+    push(@args, "-march=armv5te");                      # ???
+    push(@args, "-mtune=xscale");                       # ???
+    push(@args, "-msoft-float");                        # ???
+
+    push(@args, "-fomit-frame-pointer");                # ???
+    push(@args, "-fno-strict-aliasing");                # ???
+    push(@args, "-finline-limit=64");                   # ???
+
+    push(@args, "-Wa,--noexecstack");
+
+    push(@args, "-Bdynamic");							#
+    push(@args, "--sysroot=${platform_dir}/arch-arm");	#
+
+    push(@args, "-fno-exceptions");						#
+    #push(@args, "-fno-rtti");							# TODO should only be added when compiling c++ code
+
+    # optimizations
+    push(@args, "-O2");									#
+    push(@args, "-Os");									#
+}
+
+if ($flags{'doAssemble'}) {
+    push(@args, "-nostdlib");
+    push(@args, "-Wl,--no-undefined");
+    push(@args, "-Wl,-z,noexecstack");
+    push(@args, "-Wl,-rpath-link=${platform_dir}/arch-arm/usr/lib");
+}
+
+if ($flags{'doLink'}) {
+    push(@args, "${toolchain_dir}/lib/gcc/arm-linux-androideabi/${ndk_gcc_version}/libgcc.a");
+
+    if ($flags{'linkShared'}) {
+        push(@args, "${platform_dir}/arch-arm/usr/lib/libc.so");
+        push(@args, "${platform_dir}/arch-arm/usr/lib/libstdc++.so");
+        push(@args, "${platform_dir}/arch-arm/usr/lib/libm.so");
+    }
+
+    if ($flags{'linkStatic'}) {
+    }
+
+    if ($flags{'createShared'}) {
+        # creating a shared library
+        push(@args, "-Wl,-shared,-Bsymbolic");	# somehow -Bsymbolic is a very important flag
+        push(@args, "-Wl,--whole-archive");     # TODO libs should go in between?
+        push(@args, "-Wl,--no-whole-archive");  # ...
+    } else {
+        # creating everything else
+        push(@args, "-Wl,-dynamic-linker,/system/bin/linker");
+        push(@args, "-Wl,--gc-sections");
+        push(@args, "-Wl,-z,nocopyreloc");
+        unshift(@args, "${platform_dir}/arch-arm/usr/lib/crtbegin_dynamic.o");
+        push(@args, "${platform_dir}/arch-arm/usr/lib/crtend_android.o");
+    }
+}
+
+my @cmd = ($gcc_exec, @before_args, @args, @after_args);
+
+#print join(" ", "### GCC CALL: ", @cmd), " ###\n"; # Spit it out if you're curious
+warn join(" ", "### GCC CALL: ", @cmd), " ###\n"; # Spit it out if you're curious
+exec(@cmd);

@@ -1,0 +1,110 @@
+/**
+ * \ingroup Manual
+ * \addtogroup AdvTopics
+ *
+ * This module provides information on advanced topics. It is recommanded to read the other manual modules before starting here. Here you can find the following parts:
+ *
+ * - \ref sec_adv_cli
+ * - \ref sec_adv_tun
+ * - \ref sec_adv_compat
+ * - \ref sec_ifaces_rm
+ * - <a href="http://code.google.com/p/libcli/wiki/DevelopersReference">Using CLI passwords</a>
+ * - \ref sec_didntlearn
+ *
+ * @section sec_adv_cli Custom CLI Commands
+ *
+ * How to add custom CLI commands will be explain using the following example scenario: Consider you have a routing daemon that uses the parameter <i>threshold</i> with a value in [0,1]. The value shall be configurable via the CLI.
+ *
+ * First of all, we create a "set" CLI anchor. This means all commands that are registered with this anchor have to be prefixed by the word "set" when entered in the CLI. As setting options is a critical task, it should only be allowed in the privileged mode.
+ *
+ * @code
+ *  struct cli_command *cli_cfg_set;
+ *  cli_cfg_set = cli_register_command(dessert_cli, NULL, "set", NULL, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "set variable");
+ * @endcode
+ *
+ * The following function can be used to parse the value specified in the CLI and set the threshold if it is valid. Our "set threshold option" in the cli gets only a parameter, which is a floating number between 0 and 1.
+ *
+ * As you can see we simply check, whether the given input is correct. In other words: whether we only have one parameter and whether it is a number between 0 and 1. Then we put the value of the threshold in our daemon to the new one.
+ *
+ * @code
+ *  double threshold = 0;
+ *
+ *  int set_threshold(struct cli_def *cli, char *command, char *argv[], int argc) {
+ *      double d;
+ *
+ *      if (argc != 1) {
+ *          cli_print(cli, "usage %s [float]\n", command);
+ *          return CLI_ERROR;
+ *      }
+ *
+ *      d = strtod(argv[0], NULL);
+ *
+ *      if (d <= 0 || d >= 1) {
+ *          cli_print(cli, "threshold must be in [0,1]\n");
+ *          return CLI_ERROR;
+ *      }
+ *
+ *      threshold = d;
+ *      dessert_info("setting threshold to %f", threshold);
+ *      return CLI_OK;
+ *  }
+ * @endcode
+ *
+ * If you want to implement a flexible code, you should use many cli commands. It gives your the oppertunity to change your daemon without stopping and recompiling it. Think of a function which prints the current routing table. You could see in the runtime of your daemon to which other nodes a route is selected. There are a few operations for that cli commands should be implemented:
+ *
+ * - setting routing protocol specific values (threshold, link metric, hello interval, etc.)
+ * - printing the routing table
+ * - enabling and disabling debugging messages
+ * - saving the current configuration
+ *
+ * If you want to use your function respectively use the cli with the new operation you have to register your function as a child of the set anchor which we discussed earlier.
+ *
+ * @code
+ *  cli_register_command(dessert_cli, cli_cfg_set, "threshold", set_threshold, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "set threshold");
+ * @endcode
+ *
+ * When you have compiled and started the daemon, connect with telnet (\ref sec_usage_telnet). You can now set the threshold value in the privileged mode as follow.
+ *
+ * @code
+ *  set threshold 0.4
+ * @endcode
+ *
+ * @section sec_adv_tun Using TUN Interfaces
+ *
+ * You can replace the TAP interface used in the \ref ExampleDaemon "example" of this manual by a TUN interface. Remember: Packets received or sent via a TUN interface are IPv4/IPv6 datagrams. You have to register the dessert_cli_cmd_addsysif_tun() instead of dessert_cli_cmd_addsysif() for the CLI to register a TUN interface. Here you can see how this would look like:
+ *
+ * @code
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "sys", dessert_cli_cmd_addsysif_tun, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize sys interface");
+ *    cli_register_command(dessert_cli, dessert_cli_cfg_iface, "mesh", dessert_cli_cmd_addmeshif_tun, PRIVILEGE_PRIVILEGED, MODE_CONFIG, "initialize mesh interface");
+ * @endcode
+ *
+ * Your code should not contain any ethernet specific parts as raw IP datagrams are received over TUN interfaces.
+ *
+ * @section sec_adv_compat TUN/TAP Compatibility
+ *
+ * To achieve compatibility between the two different sys interface types, it is best to use dessert_syssend_msg() instead of dessert_syssend() as this function will determine what packet was encapsulated.
+ *
+ * @code
+ *  dessert_syssend_msg(msg);
+ * @endcode
+ *
+ * As you can see the dessert_syssend_msg() funciton only gets one argument. Now you dont use the ethernet packet as a parameter, but the DES-SERT messsage. If there is an DES-SERT ethernet extension, the frame will be reconstructed and if the extension is missing, it only handles the IP datagram. In both cases the packet is send to the kernel.
+ *
+ * When implementing routing protocols you should only rely on the layer 3 address for your path selection to achieve compatibility. The Ethernet extension should be ignored.
+ *
+ * @section sec_ifaces_rm Removing Registered Interfaces
+ *
+ * You can remove interfaces registered as mesh or sys interface with the following functions.
+ *
+ * @code
+ *  int dessert_meshif_del(const char* dev);
+ *  int dessert_sysrxcb_del(dessert_sysrxcb_t* c);
+ * @endcode
+ *
+ * @section sec_didntlearn What You Did Not Learn
+ *
+ * - Advanced Usage of the Processsing Buffer
+ * - Retrieving DES-SERT extensions
+ * - Writing Wireshark Dissectors
+ * - Exporting OIDs via AgentX to an SNMP Agent
+ */

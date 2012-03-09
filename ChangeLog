@@ -1,0 +1,158 @@
+20110908 - 1.07
+    - Added helper functions: dessert_timevaladd, dessert_timeval2ms, dessert_ms2timeval,
+      dessert_timevaladd2
+    - The sysif MAC is only derived from the eth0 address, if this MAC addr is not yet
+      used. This allows to run multiple daemons on the same node.
+    - Added "show uptime" CLI command.
+    - Added dessert_get_uptime_ms function
+    - libtool version = 1.13.1
+
+20110720 - 1.06
+    - Fixed heap corruption bug
+    - Replaced size_t type by uint32_t
+    - Replaced some left u_int* by uint*_t
+    - Replaced uint8_t by bool where semantically appropriate
+    - Fixed several issues in log message prints
+    - Fixed display of scheduled time for tasks with unknown function name
+    - Fixed two compiler warnings due to missing function declarations in header
+    - libtool version = 1.12.1
+
+20110720 - 1.05
+    - Fixed bugs in packet filter
+    - Removed legacy defines that are replaced by enums
+    - Replaced int return values by enum types
+    - Added enum for periodics return codes
+    - The filter function is now called always before the mesh callbacks are invoked
+    - Added min, max macros (if they are not already defined)
+    - Added token bucket implementation with 3 policies
+    - Token bucket support unlimited or tail drop queueing of packets
+    - "show tasks" CLI command to show the currently registered (periodic) tasks
+    - Implemented data structure and functions to map function pointer to names
+    - libtool version = 1.11.1
+
+
+20110712 - 1.04
+    - Added CLI show function for monitor configuration
+    - Added packet filter support (untested)
+    - Merged dessert-extra
+    - Beautified code (a little bit)
+    - libtool version = 1.10.1
+
+20110621 - 1.03
+    - When binding to the IPv6 socket for the CLI fails, IPv4 is tried
+    - Introduced loglevel LOG_TRACE > LOG_DEBUG for even more verbose output
+    - Several preprocessor macros in dessert.h are now contained in enums
+    - Renamed variable from bool to boolean to enable include of stdbool.h
+    - All printing of MAC addresses realized by MAC and EXPLODE_ARRAY6 macro
+    - meshiface is not const -> remove const
+    - libtool version = 1.9.1
+
+20110530 - 1.02
+    - configure will now fail when uthash or iw are missing
+    - Introduced alternative names for some flags in dessert.h
+    - libtool version = 1.8.1
+
+20110530 - 1.01
+    - Re-written monitor code
+    - More monitor interface information availabe to routing protocols
+    - add dessert_utils.c with dessert_parse_mac
+    - Milisecond resolution for log messages
+    - add alternative log output format (disabled by default)
+    - General code cleanup
+    - use MAC-Macro & EXPLODE_ARRAY6-Macro
+    - add DL_LENGTH macro
+    - remove %M printf pattern
+    - Configure includes checks for more dependencies
+    - Replaced mkinstalldirs with MKDIR_P
+    - libtool version = 1.7.1
+
+20110330 - 1.00
+    - Merged RSSI branch / monitor interface support
+    - Added uthash and utlist header check in configure.ac
+    - libtool version = 1.6.1
+
+20110305 - 0.99
+    - Logs can now be flushed every x seconds when zlib is used
+    - Full string is now evaluated to update the loglevel (previously only first character)
+    - libtool version = 1.5.1
+
+20110226 - 0.98
+    - Added mutex for lock file writes
+    - libtool version = 1.4.1
+
+unreleased - 0.97
+    - Increased maximum number of characters in a log message from 1024 to 4096
+    - Current libtool version = 1.4.1
+
+20100801 - 0.96
+    - Merged Android branch; SNMP support can now be disabled
+    - Fixed zlib bug
+    - Removed deprecated DESSERT_LOG_DEBUG and DESSERT_LOG_NODEBUG flags
+    - Unified log output format (always a newline before the function and line number is printed)
+    - Current libtool version = 1.3.1
+
+20100624 - 0.95
+    - loglevel is now configurable over the CLI
+    - signals can be caught and handled by registered callbacks
+    - Fixed wireshark dissectors (still needs testing on Debian lenny)
+    - Changed the ethertype from 0x8042 to 0x88B5 (IEEE Std 802 - Local Experimental Ethertype 1)
+    - Increased DESSERT_MAXEXTDATALEN from 253 to 254 (extension can have a length of 256 bytes: data + 2 byte header)
+    - DESSERT_MAXFRAMELEN is now of size ETH_FRAME_LEN and not ETHER_MAX_LEN anymore (the latter includes the 4 byte CRC)
+    - The define DESSERT_MAXFRAMELEN has been replaced with the variable dessert_maxlen (initial length = ETH_FRAME_LEN)
+    - Fixed bug that made it impossible to disable logging to a file
+    - Log files can now be gzip'ed: either use DESSERT_LOG_GZ as option for dessert_logcfg or specify a log file with ".gz" as extension. If you use DESSERT_LOG_GZ and specify a file without ".gz" as extension, the extension will be added automatically.
+    - Registered SIGTERM handler to flush and close the log file
+    - Current libtool version = 1.2.1
+
+20100606 - 0.94
+    - On Linux the TAP hwaddr is now derived from eth0 (if it exists)
+    - Current libtool version = 1.1.1
+
+20100323 - 0.93
+    - Updated documentation (spelling, grammar, etc)
+    - Removed src/callbacks; the code is now in libdessert-extra
+
+20100319 - 0.92
+    - Updated, restructured, and extended documentation
+
+20100214 - 0.91
+    - libtool version = 1.1.0
+    - Added some code from several daemons in src/callbacks dir for general usage
+    - Moved some code from src/libdessert to src/callbacks to slim down library core
+    - Moved prev pointer in dessert_meshif_t to end of structure; dessert_meshif_t and dessert_sysif_t are
+      now equal again in the first few fields
+    - Added type parameter to dessert_msg_trace_initiate and dessert_msg_trace_dump to use these function with new
+      bidirectional tracing feature
+    - Added callback that decrements the IPv4 TTL or IPv6 Hop-Limit field
+    - Removed pid file parameter from dessert_init; use dessert_pid to write pid file manually
+    - Removed DESSERT_OPT_PID and DESSERT_OPT_NOPID flags because they were never used
+    - Added private function _dessert_cli_cmd_pid to include pid file name in conf file; cli callback is automatically registered
+    - Replaced dessert_ext_getdatalen macro with inline function
+    - Fixed bug in _dessert_sysif_init_thread
+    - Set IFF_NO_PI flag for TUN interfaces to make packet handling easier
+    - Modified dessert_syssend and dessert_syssend_msg to be able to handle ip datagrams
+    - Fixed max length condition in dessert_msg_ethencap
+
+20100213 - 0.90
+    - Moved to autotools and libtool versioning; current libtool version = 1.0.0
+
+20100105 - 0.87.0
+    - Developers, please be advised that the prototype of function dessert_cli_run no longer
+      contains the port as parameter. Use the function dessert_set_cli_port(uint16_t port)
+      instead or utilize the new port command within a configuration file. The default port is 4519 (D-E-S).
+    - Fixes 'Printing mesh and sys interfaces in CLI' [https://trac.mi.fu-berlin.de/des-testbed/ticket/30]
+    - Fixes 'Set port via CLI' [https://trac.mi.fu-berlin.de/des-testbed/ticket/31]
+    - Fixes 'Default mesh/sys cli functions' [https://trac.mi.fu-berlin.de/des-testbed/ticket/29]
+    - Fixes 'Get configuration file object' [https://trac.mi.fu-berlin.de/des-testbed/ticket/28]
+    - Fixes 'DESSERT_MAXEXTDATALEN vs. 253' [https://trac.mi.fu-berlin.de/des-testbed/ticket/35]
+    - Fixes 'meshsend*randomized divide by zero' [https://trac.mi.fu-berlin.de/des-testbed/ticket/37]
+    - Fixes 'Allocation Error' [https://trac.mi.fu-berlin.de/des-testbed/ticket/32]
+    - Fixes 'Disable syslog logging didn't work' [https://trac.mi.fu-berlin.de/des-testbed/ticket/33]
+
+20091126 - 0.86.13
+    - The sysrxpipeline now properly destroys the passed message on DESSERT_MSG_DROP.
+      Developers, make sure to NOT destroy the msg by yourselves anymore!
+
+20091126 - 0.86.12
+    - Added int dessert_msg_getpayload(dessert_msg_t *msg, void **payload) to
+      retrieve the length of the payload and a pointer to the payload, if any.
