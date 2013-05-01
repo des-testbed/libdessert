@@ -1,28 +1,25 @@
-DES-SERT - an Extensible Routing-Framework for Testbeds 
+DES-SERT - An Extensible Routing-Framework for Testbeds 
 =======================================================
-
-
-
-
 
 Introduction
 ------------
-   DES-SERT, the DES Simple and Extensible Routing-Framework for Testbeds,
-   is a framework designed to assist researchers implementing routing
-   protocols for testbeds.
+DES-SERT, the DES Simple and Extensible Routing-Framework for Testbeds,
+is a framework designed to assist researchers implementing routing
+protocols for testbeds.
    
-   DES-SERT enables the implementation of routing protocols on top of
-   Ethernet via an underlay (Layer 2.5) in user space.
-   It introduces an abstraction from OS specific issues and provides
-   functionality and data structures to implement proactive, reactive,
-   and hybrid routing protocols. 
+DES-SERT enables the implementation of routing protocols on top of
+Ethernet via an underlay (Layer 2.5) in user space.
+It introduces an abstraction from OS specific issues and provides
+functionality and data structures to implement proactive, reactive,
+and hybrid routing protocols. 
    
-   While generally usable in many application scenarios, it is primarily
-   used in DES-Mesh (http://www.des-testbed.net/), the multi-transceiver
-   wireless mesh network testbed part of the DES-Testbed. 
+While generally usable in many application scenarios, it is primarily
+used in DES-Mesh (http://www.des-testbed.net/), the multi-transceiver
+wireless mesh network testbed part of the DES-Testbed. 
 
 
 DES-SERT Architecture
+---------------------
 DES-SERT introduces some concepts to implement routing protocols. When implementing a routing protocol with 
 DES-SERT, you should be familiar with these concepts to structure and tailor your implementation.
 
