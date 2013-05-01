@@ -220,7 +220,10 @@ We love feedback - if you have patches, comments or questions, please contact us
 
 http://www.des-testbed.net/des-sert/
 
-If you have bug or feature request, please use the 
+If you have bug or feature request, lease create an issue here on GitHub!
+
+https://github.com/des-testbed/libdessert/issues
+
 
 Copyright
 ---------
