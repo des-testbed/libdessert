@@ -17,6 +17,8 @@ AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_LN_S
 
++m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+
 # Checks for libtool
 
 LT_INIT
